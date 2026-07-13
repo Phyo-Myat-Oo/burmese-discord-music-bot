@@ -52,6 +52,17 @@ class PlayerControlTests(unittest.TestCase):
         self.player.stop()
         self.assertEqual(self.player.repeat_mode, "off")
 
+    def test_clear_queue_preserves_current_track_and_turns_repeat_off(self):
+        self.player.current = item("Current")
+        self.player.queue.put_nowait(item("Next"))
+        self.player.queue.put_nowait(item("Later"))
+        self.player.set_repeat_mode("queue")
+
+        self.assertEqual(self.player.clear_queue(), 2)
+        self.assertEqual(self.player.queue.qsize(), 0)
+        self.assertEqual(self.player.current.title, "Current")
+        self.assertEqual(self.player.repeat_mode, "off")
+
 
 if __name__ == "__main__":
     unittest.main()

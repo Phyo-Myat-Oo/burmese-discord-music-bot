@@ -65,7 +65,7 @@ Use `--retry-failed` later to retry albums whose links were unavailable.
 - `/random`, `/randomalbum`: discover a random song or queue a random album
 - `/album play`: queue every indexed song in a chosen album, in track order
 - `/status`: show uptime, latency, catalogue size, sync state, and FFmpeg health
-- `/pause`, `/resume`, `/back`, `/skip`, `/stop`, `/leave`: playback controls
+- `/pause`, `/resume`, `/back`, `/skip`, `/clearqueue`, `/stop`, `/leave`: playback controls
 - `/repeat`: choose Off, Repeat current track, or Repeat queue
 
 The database stores stable pCloud link codes and file IDs. Temporary playback

@@ -753,6 +753,16 @@ class PlayerControlsView(discord.ui.View):
         await asyncio.sleep(0.1)
         await interaction.response.edit_message(embed=now_playing_embed(player), view=self)
 
+    @discord.ui.button(label="Clear Queue", emoji="🗑️", style=discord.ButtonStyle.danger, row=1)
+    async def clear_queue_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        player = bot.player(interaction.guild)  # type: ignore[arg-type]
+        removed = player.clear_queue()
+        await interaction.response.edit_message(embed=now_playing_embed(player), view=self)
+        await interaction.followup.send(
+            f"Cleared {removed} queued song{'s' if removed != 1 else ''}. The current song continues.",
+            ephemeral=True,
+        )
+
     @discord.ui.button(label="Favorite", emoji="❤️", style=discord.ButtonStyle.secondary)
     async def favorite_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         player = bot.player(interaction.guild)  # type: ignore[arg-type]
@@ -1341,6 +1351,16 @@ async def stop(interaction: discord.Interaction) -> None:
         return
     bot.player(interaction.guild).stop()
     await interaction.response.send_message("Stopped playback and cleared the queue.")
+
+
+@bot.tree.command(description="Remove upcoming songs but keep the current song playing")
+async def clearqueue(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    removed = bot.player(interaction.guild).clear_queue()
+    await interaction.response.send_message(
+        f"Cleared {removed} queued song{'s' if removed != 1 else ''}. The current song continues."
+    )
 
 
 @bot.tree.command(description="Stop playback and leave voice")

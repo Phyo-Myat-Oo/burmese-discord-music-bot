@@ -244,14 +244,21 @@ class GuildPlayer:
             return True
         return False
 
-    def stop(self) -> None:
+    def clear_queue(self) -> int:
+        """Remove all upcoming tracks while allowing the current track to finish."""
+        removed = 0
         self.repeat_mode = "off"
         while True:
             try:
                 self.queue.get_nowait()
                 self.queue.task_done()
+                removed += 1
             except asyncio.QueueEmpty:
-                break
+                return removed
+
+    def stop(self) -> None:
+        self.repeat_mode = "off"
+        self.clear_queue()
         if self.voice and (self.voice.is_playing() or self.voice.is_paused()):
             self.voice.stop()
 
