@@ -16,6 +16,8 @@ from typing import Awaitable, Callable
 
 import discord
 
+from music.cache import StreamCache
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -134,7 +136,8 @@ class BufferedOpusAudio(discord.AudioSource):
 
 
 class GuildPlayer:
-    def __init__(self, guild: discord.Guild, on_start=None, on_finish=None, on_duration=None) -> None:
+    def __init__(self, guild: discord.Guild, on_start=None, on_finish=None, on_duration=None,
+                 cache_dir: Path | None = None) -> None:
         self.guild = guild
         self.voice: discord.VoiceClient | None = None
         self.queue: asyncio.Queue[QueueItem] = asyncio.Queue()
@@ -150,6 +153,8 @@ class GuildPlayer:
         self._was_skipped = False
         self.repeat_mode = "off"
         self.history: list[QueueItem] = []
+        _cache_dir = cache_dir or Path(os.getenv("AUDIO_CACHE_DIR", "data/audio_cache"))
+        self.cache = StreamCache(_cache_dir)
 
     @staticmethod
     def _replay_item(item: QueueItem) -> QueueItem:
@@ -173,6 +178,7 @@ class GuildPlayer:
         """Return to the most recently completed track, keeping this one queued."""
         if not self.history:
             return False
+        self.cache.cancel()
         previous_item = self._replay_item(self.history.pop())
         if self.current:
             self._put_first(self._replay_item(self.current))
@@ -222,16 +228,33 @@ class GuildPlayer:
             self.current = item
             self._was_skipped = False
             played = False
+            prefetched_file: Path | None = None
             try:
                 finished = asyncio.Event()
                 loop = asyncio.get_running_loop()
-                resolved = await item.source() if callable(item.source) else item.source
-                if isinstance(resolved, dict):
-                    source_value = resolved["url"]
-                    headers = resolved.get("headers", {})
+
+                # Attempt to use a pre-downloaded cached file; fall back to live resolution.
+                prefetched_file = await self.cache.consume(item)
+
+                if prefetched_file is not None:
+                    source_value = str(prefetched_file)
+                    headers: dict = {}
+                    before_opts = "-nostdin -hide_banner -loglevel error"
                 else:
-                    source_value = str(resolved)
-                    headers = {}
+                    resolved = await item.source() if callable(item.source) else item.source
+                    if isinstance(resolved, dict):
+                        source_value = resolved["url"]
+                        headers = resolved.get("headers", {})
+                    else:
+                        source_value = str(resolved)
+                        headers = {}
+                    before_opts = (
+                        "-nostdin -hide_banner -loglevel error -reconnect 1 "
+                        "-reconnect_streamed 1 -reconnect_delay_max 5"
+                    )
+                    if headers:
+                        header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+                        before_opts = f'-headers {shlex.quote(header_str)} ' + before_opts
 
                 if item.duration is None:
                     item.duration = await asyncio.to_thread(probe_duration, source_value, self.ffmpeg)
@@ -240,14 +263,6 @@ class GuildPlayer:
                             await self.on_duration(item)
                         except Exception:
                             LOGGER.exception("Could not cache duration for %s", item.title)
-
-                before_opts = (
-                    "-nostdin -hide_banner -loglevel error -reconnect 1 "
-                    "-reconnect_streamed 1 -reconnect_delay_max 5"
-                )
-                if headers:
-                    header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
-                    before_opts = f'-headers {shlex.quote(header_str)} ' + before_opts
 
                 source = discord.FFmpegOpusAudio(
                     source_value,
@@ -269,6 +284,12 @@ class GuildPlayer:
                 self.started_at = time.monotonic()
                 self.paused_at = None
                 self.paused_total = 0.0
+
+                # Pre-download the next track while this one plays.
+                upcoming = list(self.queue._queue)
+                if upcoming:
+                    await self.cache.prefetch(upcoming[0])
+
                 if self.on_start:
                     try:
                         item.history_id = await self.on_start(item)
@@ -278,6 +299,9 @@ class GuildPlayer:
             except Exception:
                 LOGGER.exception("Could not start playback for %s", item.title)
             finally:
+                # Delete the temporary pre-downloaded file now that playback has ended.
+                if prefetched_file is not None:
+                    StreamCache.delete_file(prefetched_file)
                 completed = played and not self._was_skipped
                 if self.on_finish and item.history_id:
                     try:
@@ -319,6 +343,7 @@ class GuildPlayer:
 
     def clear_queue(self) -> int:
         """Remove all upcoming tracks while allowing the current track to finish."""
+        self.cache.cancel()
         removed = 0
         self.repeat_mode = "off"
         while True:
@@ -340,6 +365,7 @@ class GuildPlayer:
         target = index + offset
         if index < 0 or target < 0 or index >= self.queue.qsize() or target >= self.queue.qsize():
             return None
+        self.cache.cancel()
         items = self.queue._queue
         items[index], items[target] = items[target], items[index]
         return target
@@ -361,6 +387,7 @@ class GuildPlayer:
 
     async def close(self) -> None:
         self.stop()
+        self.cache.cancel()
         if self.voice:
             await self.voice.disconnect(force=True)
         self.voice = None
