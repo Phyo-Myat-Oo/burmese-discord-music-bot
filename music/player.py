@@ -4,9 +4,11 @@ import asyncio
 import json
 import logging
 import os
+import queue as thread_queue
 import shlex
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -61,6 +63,74 @@ def probe_duration(source: str, ffmpeg: str) -> int | None:
         return int(float(value)) if value else None
     except (OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError):
         return None
+
+
+def prebuffer_frame_count() -> int:
+    """Return a bounded number of 20 ms Opus frames to hold before playback."""
+    try:
+        seconds = float(os.getenv("AUDIO_PREBUFFER_SECONDS", "2"))
+    except ValueError:
+        seconds = 2.0
+    return max(0, min(250, round(seconds * 50)))
+
+
+class BufferedOpusAudio(discord.AudioSource):
+    """Keep a short in-memory buffer between FFmpeg and Discord's voice thread."""
+
+    def __init__(self, source: discord.AudioSource, frame_count: int) -> None:
+        self.source = source
+        self.frame_count = frame_count
+        self.frames: thread_queue.Queue[bytes | None] = thread_queue.Queue(
+            maxsize=max(frame_count * 2, frame_count + 1)
+        )
+        self.ready = threading.Event()
+        self.stopped = threading.Event()
+        self.worker = threading.Thread(target=self._pump, name="daisy-audio-buffer", daemon=True)
+        self.worker.start()
+
+    def _put(self, frame: bytes | None) -> bool:
+        while not self.stopped.is_set():
+            try:
+                self.frames.put(frame, timeout=0.1)
+                return True
+            except thread_queue.Full:
+                continue
+        return False
+
+    def _pump(self) -> None:
+        try:
+            while not self.stopped.is_set():
+                frame = self.source.read()
+                if not frame:
+                    break
+                if not self._put(frame):
+                    return
+                if self.frames.qsize() >= self.frame_count:
+                    self.ready.set()
+        except Exception:
+            LOGGER.exception("Audio pre-buffer stopped unexpectedly")
+        finally:
+            self.ready.set()
+            self._put(None)
+
+    def read(self) -> bytes:
+        self.ready.wait(timeout=10)
+        if self.stopped.is_set():
+            return b""
+        try:
+            frame = self.frames.get(timeout=15)
+        except thread_queue.Empty:
+            LOGGER.warning("Audio pre-buffer ran dry")
+            return b""
+        return frame or b""
+
+    def is_opus(self) -> bool:
+        return self.source.is_opus()
+
+    def cleanup(self) -> None:
+        self.stopped.set()
+        self.ready.set()
+        self.source.cleanup()
 
 
 class GuildPlayer:
@@ -185,6 +255,9 @@ class GuildPlayer:
                     before_options=before_opts,
                     options="-vn",
                 )
+                buffer_frames = prebuffer_frame_count()
+                if buffer_frames:
+                    source = BufferedOpusAudio(source, buffer_frames)
 
                 def after(error: Exception | None) -> None:
                     if error:

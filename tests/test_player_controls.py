@@ -1,8 +1,9 @@
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from music.player import GuildPlayer, QueueItem
+from music.player import BufferedOpusAudio, GuildPlayer, QueueItem, prebuffer_frame_count
 
 
 class FakeVoice:
@@ -17,6 +18,21 @@ class FakeVoice:
 
     def stop(self) -> None:
         self.stopped = True
+
+
+class FakeOpusSource:
+    def __init__(self, frames: list[bytes]) -> None:
+        self.frames = iter(frames)
+        self.cleaned = False
+
+    def read(self) -> bytes:
+        return next(self.frames, b"")
+
+    def is_opus(self) -> bool:
+        return True
+
+    def cleanup(self) -> None:
+        self.cleaned = True
 
 
 def item(title: str, history_id: int | None = None) -> QueueItem:
@@ -75,6 +91,23 @@ class PlayerControlTests(unittest.TestCase):
         )
         self.assertIsNone(self.player.move_queue_item(0, -1))
         self.assertEqual(self.player.current.title, "Current")
+
+    def test_audio_prebuffer_reads_frames_in_order(self):
+        source = FakeOpusSource([b"one", b"two", b"three"])
+        buffered = BufferedOpusAudio(source, frame_count=2)
+        self.assertTrue(buffered.is_opus())
+        self.assertEqual(buffered.read(), b"one")
+        self.assertEqual(buffered.read(), b"two")
+        self.assertEqual(buffered.read(), b"three")
+        self.assertEqual(buffered.read(), b"")
+        buffered.cleanup()
+        self.assertTrue(source.cleaned)
+
+    def test_prebuffer_configuration_is_bounded(self):
+        with patch.dict(os.environ, {"AUDIO_PREBUFFER_SECONDS": "99"}):
+            self.assertEqual(prebuffer_frame_count(), 250)
+        with patch.dict(os.environ, {"AUDIO_PREBUFFER_SECONDS": "invalid"}):
+            self.assertEqual(prebuffer_frame_count(), 100)
 
 
 if __name__ == "__main__":
