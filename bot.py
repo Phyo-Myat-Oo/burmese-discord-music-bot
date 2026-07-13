@@ -669,6 +669,7 @@ def now_playing_embed(player: GuildPlayer) -> discord.Embed:
     embed.add_field(name="Album", value=item.album or "Unknown", inline=False)
     embed.add_field(name="Requested by", value=item.requester, inline=True)
     embed.add_field(name="Up next", value=str(player.queue.qsize()), inline=True)
+    embed.add_field(name="Repeat", value=player.repeat_mode.title(), inline=True)
     elapsed = player.elapsed
     if item.duration:
         filled = min(12, int(12 * elapsed / max(1, item.duration)))
@@ -730,6 +731,20 @@ class PlayerControlsView(discord.ui.View):
         player = bot.player(interaction.guild)  # type: ignore[arg-type]
         player.skip()
         await interaction.response.send_message("Skipped.", ephemeral=True)
+
+    @discord.ui.button(label="Back", emoji="⏮️", style=discord.ButtonStyle.secondary, row=1)
+    async def back_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        player = bot.player(interaction.guild)  # type: ignore[arg-type]
+        if not player.previous():
+            await interaction.response.send_message("There is no previous track.", ephemeral=True)
+            return
+        await interaction.response.send_message("Going back to the previous track.", ephemeral=True)
+
+    @discord.ui.button(label="Repeat", emoji="🔁", style=discord.ButtonStyle.secondary, row=1)
+    async def repeat_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        player = bot.player(interaction.guild)  # type: ignore[arg-type]
+        player.cycle_repeat_mode()
+        await interaction.response.edit_message(embed=now_playing_embed(player), view=self)
 
     @discord.ui.button(label="Stop", emoji="⏹️", style=discord.ButtonStyle.danger)
     async def stop_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -1287,6 +1302,29 @@ async def resume(interaction: discord.Interaction) -> None:
         return
     changed = bot.player(interaction.guild).resume()
     await interaction.response.send_message("Resumed." if changed else "Nothing is paused.")
+
+
+@bot.tree.command(description="Return to the previous completed track")
+async def back(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    changed = bot.player(interaction.guild).previous()
+    await interaction.response.send_message(
+        "Going back to the previous track." if changed else "There is no previous track."
+    )
+
+
+@bot.tree.command(description="Set repeat mode for this server's music queue")
+@app_commands.choices(mode=[
+    app_commands.Choice(name="Off", value="off"),
+    app_commands.Choice(name="Repeat current track", value="track"),
+    app_commands.Choice(name="Repeat queue", value="queue"),
+])
+async def repeat(interaction: discord.Interaction, mode: str) -> None:
+    if not interaction.guild:
+        return
+    selected = bot.player(interaction.guild).set_repeat_mode(mode)
+    await interaction.response.send_message(f"Repeat mode: **{selected.title()}**.")
 
 
 @bot.tree.command(description="Skip the current track")

@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -78,6 +78,39 @@ class GuildPlayer:
         self.paused_at: float | None = None
         self.paused_total = 0.0
         self._was_skipped = False
+        self.repeat_mode = "off"
+        self.history: list[QueueItem] = []
+
+    @staticmethod
+    def _replay_item(item: QueueItem) -> QueueItem:
+        """Copy a queue item without reusing its playback-history record."""
+        return replace(item, history_id=None)
+
+    def _put_first(self, item: QueueItem) -> None:
+        self.queue._queue.appendleft(item)
+
+    def cycle_repeat_mode(self) -> str:
+        self.repeat_mode = {"off": "track", "track": "queue", "queue": "off"}[self.repeat_mode]
+        return self.repeat_mode
+
+    def set_repeat_mode(self, mode: str) -> str:
+        if mode not in {"off", "track", "queue"}:
+            raise ValueError("Repeat mode must be off, track, or queue.")
+        self.repeat_mode = mode
+        return self.repeat_mode
+
+    def previous(self) -> bool:
+        """Return to the most recently completed track, keeping this one queued."""
+        if not self.history:
+            return False
+        previous_item = self._replay_item(self.history.pop())
+        if self.current:
+            self._put_first(self._replay_item(self.current))
+        self._put_first(previous_item)
+        if self.voice and (self.voice.is_playing() or self.voice.is_paused()):
+            self._was_skipped = True
+            self.voice.stop()
+        return True
 
     async def connect(self, channel: discord.VoiceChannel | discord.StageChannel) -> None:
         if self.voice and self.voice.is_connected():
@@ -92,7 +125,7 @@ class GuildPlayer:
             self.worker = asyncio.create_task(self._run())
 
     async def enqueue_stream(
-        self, resolver: Callable[[], Awaitable[str]], title: str,
+        self, resolver: Callable[[], Awaitable[str | dict]], title: str,
         album: str = "", requester: str = "Unknown", track_id: int | None = None,
         source_type: str = "pcloud", source_url: str = "", uploader: str = "",
         duration: int | None = None, thumbnail: str | None = None,
@@ -118,6 +151,7 @@ class GuildPlayer:
                 return
             self.current = item
             self._was_skipped = False
+            played = False
             try:
                 finished = asyncio.Event()
                 loop = asyncio.get_running_loop()
@@ -158,6 +192,7 @@ class GuildPlayer:
                     loop.call_soon_threadsafe(finished.set)
 
                 self.voice.play(source, after=after)
+                played = True
                 self.started_at = time.monotonic()
                 self.paused_at = None
                 self.paused_total = 0.0
@@ -170,11 +205,19 @@ class GuildPlayer:
             except Exception:
                 LOGGER.exception("Could not start playback for %s", item.title)
             finally:
+                completed = played and not self._was_skipped
                 if self.on_finish and item.history_id:
                     try:
-                        await self.on_finish(item, not self._was_skipped)
+                        await self.on_finish(item, completed)
                     except Exception:
                         LOGGER.exception("Could not complete history for %s", item.title)
+                if completed:
+                    self.history.append(self._replay_item(item))
+                    del self.history[:-50]
+                    if self.repeat_mode == "track":
+                        self._put_first(self._replay_item(item))
+                    elif self.repeat_mode == "queue":
+                        await self.queue.put(self._replay_item(item))
                 self.current = None
                 self.started_at = None
                 self.paused_at = None
@@ -202,6 +245,7 @@ class GuildPlayer:
         return False
 
     def stop(self) -> None:
+        self.repeat_mode = "off"
         while True:
             try:
                 self.queue.get_nowait()
