@@ -1,6 +1,6 @@
 import unittest
 
-from music.text import clean_album_title, clean_track_title, search_key
+from music.text import clean_album_title, clean_track_title, extract_artists, search_key
 
 
 class BurmeseTextTests(unittest.TestCase):
@@ -12,6 +12,12 @@ class BurmeseTextTests(unittest.TestCase):
 
     def test_search_ignores_spacing_punctuation_and_digit_style(self):
         self.assertEqual(search_key("၀၁။ မာ မာ-အေး"), search_key("01 မာမာအေး"))
+
+    def test_extracts_collaborating_artists(self):
+        self.assertEqual(
+            extract_artists("မာမာအေး၊ ချိုပြုံး - စုံတွဲတေးများ (320-UNI)"),
+            ["မာမာအေး", "ချိုပြုံး"],
+        )
 
 
 if __name__ == "__main__":

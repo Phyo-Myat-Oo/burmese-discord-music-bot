@@ -1,0 +1,23 @@
+# Daisy Upgrade TODO
+
+- [x] Rich now-playing display
+  - [x] Album cover
+  - [x] Separate artist field
+  - [x] Blogspot or YouTube source link
+  - [x] Track duration
+  - [x] Playback progress
+- [x] Personal and server playlists
+  - [x] `/playlist create`
+  - [x] `/playlist add`
+  - [x] `/playlist remove`
+  - [x] `/playlist play`
+  - [x] `/playlists`
+- [x] Listening history and statistics
+  - [x] `/history`
+  - [x] `/recent`
+  - [x] `/top songs`
+  - [x] `/top artists`
+  - [x] `/my stats`
+- [x] Normalized artist and album relationships
+- [x] Slash-command autocomplete for tracks and artists
+- [x] Full metadata migration and regression verification

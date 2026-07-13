@@ -53,7 +53,36 @@ class MusicBot(commands.Bot):
             self.auto_sync_task = asyncio.create_task(self._automatic_sync())
 
     def player(self, guild: discord.Guild) -> GuildPlayer:
-        return self.players.setdefault(guild.id, GuildPlayer(guild))
+        return self.players.setdefault(
+            guild.id, GuildPlayer(
+                guild, self._track_started, self._track_finished, self._track_duration
+            )
+        )
+
+    async def _track_started(self, item) -> int:
+        return await self.library.record_play_start(
+            self._guild_for_item(item), item.requester_id or 0,
+            {
+                "source_type": item.source_type, "track_id": item.track_id,
+                "source_url": item.source_url, "title": item.title,
+                "artist": item.artist or item.uploader, "album": item.album,
+                "duration": item.duration,
+            },
+        )
+
+    def _guild_for_item(self, item) -> int:
+        for guild_id, player in self.players.items():
+            if player.current is item:
+                return guild_id
+        return 0
+
+    async def _track_finished(self, item, completed: bool) -> None:
+        if completed and item.history_id:
+            await self.library.complete_history(item.history_id)
+
+    async def _track_duration(self, item) -> None:
+        if item.track_id and item.duration:
+            await self.library.update_track_duration(item.track_id, item.duration)
 
     async def incremental_sync(self) -> dict[str, int]:
         async with self.sync_lock:
@@ -107,7 +136,10 @@ async def queue_pcloud_track(interaction: discord.Interaction, track) -> str:
             return await PCloudClient(session).stream_url(track["code"], track["file_id"])
 
     position = await player.enqueue_stream(
-        resolve, track["title"], track["album_title"], member.display_name, track["id"]
+        resolve, track["title"], track["album_title"], member.display_name, track["id"],
+        source_url=track["post_url"], duration=track["duration"],
+        artist=track["artist"] or "Unknown", cover_url=track["cover_url"],
+        requester_id=member.id,
     )
     return (
         f"Queued **{track['title']}**\nAlbum: {track['album_title']}\n"
@@ -131,6 +163,7 @@ async def queue_youtube_track(interaction: discord.Interaction, result: YouTubeR
         resolve, result.title, f"YouTube • {result.uploader}", member.display_name,
         source_type="youtube", source_url=result.url, uploader=result.uploader,
         duration=result.duration, thumbnail=result.thumbnail,
+        artist=result.uploader, cover_url=result.thumbnail, requester_id=member.id,
     )
     return (
         f"Queued **{result.title}**\nChannel: {result.uploader}\n"
@@ -602,11 +635,41 @@ def now_playing_embed(player: GuildPlayer) -> discord.Embed:
     if not item:
         return discord.Embed(description="Nothing is playing.", color=discord.Color.dark_grey())
     status = "Paused" if player.is_paused else "Playing"
-    embed = discord.Embed(title=f"{status}: {item.title}", color=discord.Color.purple())
+    embed = discord.Embed(
+        title=f"{status}: {item.title}", url=item.source_url or None,
+        color=discord.Color.purple(),
+    )
+    embed.add_field(name="Artist", value=item.artist or item.uploader or "Unknown", inline=False)
     embed.add_field(name="Album", value=item.album or "Unknown", inline=False)
     embed.add_field(name="Requested by", value=item.requester, inline=True)
     embed.add_field(name="Up next", value=str(player.queue.qsize()), inline=True)
+    elapsed = player.elapsed
+    if item.duration:
+        filled = min(12, int(12 * elapsed / max(1, item.duration)))
+        bar = "━" * filled + "●" + "─" * (12 - filled)
+        progress = f"{format_duration(elapsed)} {bar} {format_duration(item.duration)}"
+    else:
+        progress = f"{format_duration(elapsed)} elapsed"
+    embed.add_field(name="Progress", value=progress, inline=False)
+    if item.source_url:
+        source_name = "Watch on YouTube" if item.source_type == "youtube" else "Original Blogspot post"
+        embed.add_field(name="Source", value=f"[{source_name}]({item.source_url})", inline=False)
+    if item.cover_url:
+        embed.set_thumbnail(url=item.cover_url)
     return embed
+
+
+async def find_track_input(value: str):
+    value = value.strip()
+    if value.startswith("id:") and value[3:].isdigit():
+        return await bot.library.pcloud_track_by_id(int(value[3:]))
+    return await bot.library.find_pcloud_track(value)
+
+
+def format_duration(seconds: int) -> str:
+    minutes, seconds = divmod(max(0, int(seconds)), 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
 
 
 class PlayerControlsView(discord.ui.View):
@@ -669,6 +732,133 @@ class PlayerControlsView(discord.ui.View):
             "Added to your favorites." if added else "That song is already a favorite.",
             ephemeral=True,
         )
+
+    @discord.ui.button(label="Refresh progress", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
+    async def refresh_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        player = bot.player(interaction.guild)  # type: ignore[arg-type]
+        await interaction.response.edit_message(embed=now_playing_embed(player), view=self)
+
+
+playlist_group = app_commands.Group(name="playlist", description="Manage personal or server playlists")
+
+
+@playlist_group.command(name="create", description="Create a playlist")
+@app_commands.describe(name="Playlist name", scope="personal or server")
+@app_commands.choices(scope=[
+    app_commands.Choice(name="Personal", value="personal"),
+    app_commands.Choice(name="Server", value="server"),
+])
+async def playlist_create(interaction: discord.Interaction, name: str, scope: str = "personal") -> None:
+    if not interaction.guild or scope not in {"personal", "server"}:
+        await interaction.response.send_message("Scope must be `personal` or `server`.", ephemeral=True)
+        return
+    created = await bot.library.create_playlist(
+        scope, name, interaction.user.id, interaction.guild.id
+    )
+    await interaction.response.send_message(
+        f"Created {scope} playlist **{name}**." if created
+        else "That playlist already exists or its name is invalid.", ephemeral=True,
+    )
+
+
+def queue_item_metadata(item) -> dict:
+    return {
+        "source_type": item.source_type, "track_id": item.track_id,
+        "source_url": item.source_url, "title": item.title,
+        "artist": item.artist, "album": item.album, "uploader": item.uploader,
+        "duration": item.duration, "thumbnail": item.thumbnail,
+    }
+
+
+@playlist_group.command(name="add", description="Add a song or the current song")
+@app_commands.describe(name="Playlist name", query="Catalogue song; omit for current song", scope="personal or server")
+@app_commands.choices(scope=[
+    app_commands.Choice(name="Personal", value="personal"),
+    app_commands.Choice(name="Server", value="server"),
+])
+async def playlist_add(
+    interaction: discord.Interaction, name: str, query: str = "", scope: str = "personal",
+) -> None:
+    if not interaction.guild or scope not in {"personal", "server"}:
+        await interaction.response.send_message("Scope must be `personal` or `server`.", ephemeral=True)
+        return
+    if query.strip():
+        track = await find_track_input(query)
+        item = {
+            "source_type": "pcloud", "track_id": track["id"] if track else None,
+            "source_url": track["post_url"] if track else None,
+            "title": track["title"] if track else "", "artist": track["artist"] if track else "",
+            "album": track["album_title"] if track else "", "duration": track["duration"] if track else None,
+        } if track else None
+    else:
+        current = bot.player(interaction.guild).current
+        item = queue_item_metadata(current) if current else None
+    if not item:
+        await interaction.response.send_message("No matching or currently playing song.", ephemeral=True)
+        return
+    added = await bot.library.add_playlist_item(
+        scope, name, interaction.user.id, interaction.guild.id, item
+    )
+    await interaction.response.send_message(
+        f"Added **{item['title']}** to **{name}**." if added else "Playlist not found.",
+        ephemeral=True,
+    )
+
+
+@playlist_group.command(name="remove", description="Remove a playlist item by position")
+@app_commands.choices(scope=[
+    app_commands.Choice(name="Personal", value="personal"),
+    app_commands.Choice(name="Server", value="server"),
+])
+async def playlist_remove(
+    interaction: discord.Interaction, name: str, position: int, scope: str = "personal",
+) -> None:
+    if not interaction.guild:
+        return
+    removed = await bot.library.remove_playlist_item(
+        scope, name, position, interaction.user.id, interaction.guild.id
+    )
+    await interaction.response.send_message(
+        "Removed and reordered the playlist." if removed else "Playlist or position not found.",
+        ephemeral=True,
+    )
+
+
+@playlist_group.command(name="play", description="Queue every song in a playlist")
+@app_commands.choices(scope=[
+    app_commands.Choice(name="Personal", value="personal"),
+    app_commands.Choice(name="Server", value="server"),
+])
+async def playlist_play(
+    interaction: discord.Interaction, name: str, scope: str = "personal",
+) -> None:
+    if not interaction.guild:
+        return
+    rows = await bot.library.playlist_items(
+        scope, name, interaction.user.id, interaction.guild.id
+    )
+    if not rows:
+        await interaction.response.send_message("Playlist is empty or not found.", ephemeral=True)
+        return
+    await interaction.response.defer(thinking=True)
+    try:
+        for row in rows[:100]:
+            if row["source_type"] == "youtube":
+                result = YouTubeResult(
+                    row["resolved_title"], row["source_url"], row["uploader"] or "YouTube",
+                    row["resolved_duration"], row["thumbnail"],
+                )
+                await queue_youtube_track(interaction, result)
+            elif row["track_id"]:
+                track = await bot.library.pcloud_track_by_id(row["track_id"])
+                await queue_pcloud_track(interaction, track)
+    except (ValueError, YouTubeError) as exc:
+        await interaction.followup.send(str(exc), ephemeral=True)
+        return
+    await interaction.followup.send(f"Queued **{name}** with {min(len(rows),100)} songs.")
+
+
+bot.tree.add_command(playlist_group)
 
 
 @bot.tree.command(description="Index new albums from Phyu Ni War Pyar")
@@ -736,7 +926,7 @@ async def scan_music(interaction: discord.Interaction) -> None:
 @bot.tree.command(description="Stream an indexed pCloud song by title")
 @app_commands.describe(query="Song filename or album name")
 async def play(interaction: discord.Interaction, query: str) -> None:
-    track = await bot.library.find_pcloud_track(query)
+    track = await find_track_input(query)
     if not track:
         await interaction.response.send_message("That pCloud track is not indexed yet.", ephemeral=True)
         return
@@ -846,6 +1036,22 @@ async def favorites(interaction: discord.Interaction) -> None:
     await interaction.response.send_message(embed=await view.render(), view=view, ephemeral=True)
 
 
+@bot.tree.command(description="List your personal and this server's playlists")
+async def playlists(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    rows = await bot.library.list_playlists(interaction.user.id, interaction.guild.id)
+    lines = [
+        f"**{row['name']}** — {row['scope']} • {row['item_count']} songs" for row in rows
+    ]
+    await interaction.response.send_message(
+        embed=discord.Embed(
+            title="Available playlists", description="\n".join(lines) or "No playlists yet.",
+            color=discord.Color.orange(),
+        ), ephemeral=True,
+    )
+
+
 @bot.tree.command(description="Queue a random song, optionally from an artist")
 @app_commands.describe(artist="Optional artist name")
 async def random(interaction: discord.Interaction, artist: str = "") -> None:
@@ -880,6 +1086,74 @@ async def randomalbum(interaction: discord.Interaction, artist: str = "") -> Non
     await interaction.followup.send(
         f"🎲 Queued **{album['title']}** with {len(tracks)} tracks."
     )
+
+
+def history_embed(title: str, rows) -> discord.Embed:
+    lines = [
+        f"**{index}. {row['title']}** — {row['artist'] or 'Unknown'}\n"
+        f"{row['album'] or row['source_type']} • <t:{int(datetime.fromisoformat(row['played_at']).timestamp())}:R>"
+        for index, row in enumerate(rows, 1)
+    ]
+    return discord.Embed(
+        title=title, description="\n\n".join(lines) or "Nothing played yet.",
+        color=discord.Color.dark_teal(),
+    )
+
+
+@bot.tree.command(description="Show your listening history in this server")
+async def history(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    rows = await bot.library.history(interaction.guild.id, interaction.user.id, 15)
+    await interaction.response.send_message(embed=history_embed("Your listening history", rows), ephemeral=True)
+
+
+@bot.tree.command(description="Show recently played songs in this server")
+async def recent(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    rows = await bot.library.history(interaction.guild.id, None, 15)
+    await interaction.response.send_message(embed=history_embed("Recently played", rows))
+
+
+top_group = app_commands.Group(name="top", description="Server listening charts")
+
+
+@top_group.command(name="songs", description="Show the server's most-played songs")
+async def top_songs(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    rows = await bot.library.top_history(interaction.guild.id, "song")
+    text = "\n".join(f"**{i}. {row['name']}** — {row['plays']} plays" for i,row in enumerate(rows,1))
+    await interaction.response.send_message(embed=discord.Embed(title="Top songs",description=text or "No plays yet."))
+
+
+@top_group.command(name="artists", description="Show the server's most-played artists")
+async def top_artists(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    rows = await bot.library.top_history(interaction.guild.id, "artist")
+    text = "\n".join(f"**{i}. {row['name']}** — {row['plays']} plays" for i,row in enumerate(rows,1))
+    await interaction.response.send_message(embed=discord.Embed(title="Top artists",description=text or "No plays yet."))
+
+
+my_group = app_commands.Group(name="my", description="Your Daisy profile")
+
+
+@my_group.command(name="stats", description="Show your listening statistics")
+async def my_stats(interaction: discord.Interaction) -> None:
+    if not interaction.guild:
+        return
+    stats = await bot.library.user_stats(interaction.guild.id, interaction.user.id)
+    embed = discord.Embed(title=f"{interaction.user.display_name}'s stats",color=discord.Color.magenta())
+    embed.add_field(name="Songs started",value=f"{stats['plays']:,}")
+    embed.add_field(name="Listening time",value=format_duration(stats['seconds']))
+    embed.add_field(name="Top artist",value=stats['top_artist'],inline=False)
+    await interaction.response.send_message(embed=embed,ephemeral=True)
+
+
+bot.tree.add_command(top_group)
+bot.tree.add_command(my_group)
 
 
 @bot.tree.command(name="queue", description="Show the current song and upcoming queue")
@@ -937,7 +1211,11 @@ async def status(interaction: discord.Interaction) -> None:
     embed.add_field(name="Posts", value=f"{stats['posts']:,}")
     embed.add_field(name="Albums", value=f"{stats['albums']:,}")
     embed.add_field(name="Tracks", value=f"{stats['tracks']:,}")
+    embed.add_field(name="Artists", value=f"{stats['artists']:,}")
     embed.add_field(name="Favorites", value=f"{stats['favorites']:,}")
+    embed.add_field(name="Playlists", value=f"{stats['playlists']:,}")
+    embed.add_field(name="Recorded plays", value=f"{stats['history']:,}")
+    embed.add_field(name="Cached durations", value=f"{stats['durations']:,}")
     embed.add_field(name="Broken links", value=f"{stats['failed']:,}")
     embed.add_field(name="Database", value=f"{database_mb:.1f} MB")
     embed.add_field(name="Last catalogue sync", value=last_sync + sync_detail, inline=False)
@@ -982,6 +1260,33 @@ async def leave(interaction: discord.Interaction) -> None:
     if interaction.guild:
         await bot.player(interaction.guild).close()
     await interaction.response.send_message("Disconnected.")
+
+
+async def track_autocomplete(
+    interaction: discord.Interaction, current: str,
+) -> list[app_commands.Choice[str]]:
+    if not current.strip():
+        return []
+    rows = await bot.library.autocomplete_tracks(current, 25)
+    return [
+        app_commands.Choice(
+            name=f"{row['title']} — {row['album_title']}"[:100], value=f"id:{row['id']}"
+        ) for row in rows
+    ]
+
+
+async def artist_autocomplete(
+    interaction: discord.Interaction, current: str,
+) -> list[app_commands.Choice[str]]:
+    rows = await bot.library.autocomplete_artists(current, 25)
+    return [app_commands.Choice(name=row["artist"][:100],value=row["artist"][:100]) for row in rows]
+
+
+play.autocomplete("query")(track_autocomplete)
+playlist_add.autocomplete("query")(track_autocomplete)
+random.autocomplete("artist")(artist_autocomplete)
+randomalbum.autocomplete("artist")(artist_autocomplete)
+artists.autocomplete("filter_text")(artist_autocomplete)
 
 
 @bot.event

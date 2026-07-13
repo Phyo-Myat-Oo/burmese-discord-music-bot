@@ -51,6 +51,7 @@ class SiteScraper:
                     html = entry.get("content", entry.get("summary", {})).get("$t", "")
                     soup = BeautifulSoup(html, "html.parser")
                     title = entry.get("title", {}).get("$t", "Untitled")
+                    cover = soup.select_one("img[src]")
                     source_updated = entry.get("updated", {}).get("$t", "")
                     if not incremental or known_updates.get(url) != source_updated:
                         for anchor in soup.select("a[href]"):
@@ -65,6 +66,7 @@ class SiteScraper:
                         "content": soup.get_text(" ", strip=True),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "source_updated": source_updated,
+                        "cover_url": cover.get("src", "") if cover else "",
                     })
                 await self.library.upsert_posts(posts)
                 post_count += len(posts)

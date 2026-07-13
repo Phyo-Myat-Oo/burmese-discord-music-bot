@@ -28,10 +28,22 @@ To initialize every Blogspot post without waiting for every pCloud folder:
 python -m music.crawl --all --posts-only
 ```
 
+Refresh all Blogspot cover/source metadata:
+
+```powershell
+python -m music.crawl --all --posts-only --refresh
+```
+
 Then index every pending pCloud folder (safe to stop and resume):
 
 ```powershell
 python -m music.index_pcloud --concurrency 6
+```
+
+Resume the normalized artist metadata migration:
+
+```powershell
+python -m music.index_pcloud --refresh-missing --concurrency 12
 ```
 
 Use `--retry-failed` later to retry albums whose links were unavailable.
@@ -46,6 +58,9 @@ Use `--retry-failed` later to retry albums whose links were unavailable.
 - `/scan_music`: register audio files placed below `data/music` (DJ/admin only)
 - `/play`: request a fresh pCloud URL and stream the first matching track
 - `/queue`, `/nowplaying`: show queue state and playback control buttons
+- `/playlist create|add|remove|play`, `/playlists`: personal and server playlists
+- `/history`, `/recent`: personal and server listening history
+- `/top songs`, `/top artists`, `/my stats`: listening charts and statistics
 - `/favorite`, `/unfavorite`, `/favorites`: manage personal pCloud and YouTube songs
 - `/random`, `/randomalbum`: discover a random song or queue a random album
 - `/status`: show uptime, latency, catalogue size, sync state, and FFmpeg health
@@ -59,6 +74,15 @@ Track filenames are cleaned for display, and search ignores spacing,
 punctuation, `.mp3` extensions, Myanmar/Arabic digit differences, and common
 Unicode composition differences. `/play` still chooses the first title match
 for quick use; use `/search` to select an exact track.
+
+The now-playing panel shows artist, album, cover art, source link, requester,
+duration, and an elapsed progress bar. Missing pCloud durations are probed once
+with FFprobe on first playback and cached in SQLite.
+
+Artists use normalized `artists`, `album_artists`, and `track_artists`
+relationships. Embedded pCloud artist tags supplement album-title parsing for
+compilations and collaborations. Track and artist slash-command inputs provide
+autocomplete suggestions.
 
 The bot checks the 100 newest Blogspot posts every `SYNC_INTERVAL_HOURS`
 (default: 6). Only new or edited posts have their pCloud folders refreshed.

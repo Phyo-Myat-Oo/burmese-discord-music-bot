@@ -8,14 +8,15 @@ from .library import Library
 from .scraper import SiteScraper
 
 
-async def run(max_posts: int | None, posts_only: bool) -> None:
+async def run(max_posts: int | None, posts_only: bool, refresh: bool) -> None:
     library = Library(Path("data/music.db"), Path("data/music"))
     await library.initialize()
     def progress(done: int, total: int) -> None:
         print(f"Posts: {done}/{total}", flush=True)
 
     result = await SiteScraper(library).sync_posts(
-        max_posts=max_posts, scan_pcloud=not posts_only, progress=progress
+        max_posts=max_posts, scan_pcloud=not posts_only,
+        incremental=not refresh, progress=progress,
     )
     print(
         f"Indexed {result['posts']} posts, found {result['albums']} pCloud albums, "
@@ -28,8 +29,9 @@ def main() -> None:
     parser.add_argument("--max-posts", type=int, default=100)
     parser.add_argument("--all", action="store_true", help="Index every Blogspot post")
     parser.add_argument("--posts-only", action="store_true", help="Skip pCloud folder scanning")
+    parser.add_argument("--refresh", action="store_true", help="Refresh metadata for existing posts")
     args = parser.parse_args()
-    asyncio.run(run(None if args.all else args.max_posts, args.posts_only))
+    asyncio.run(run(None if args.all else args.max_posts, args.posts_only, args.refresh))
 
 
 if __name__ == "__main__":

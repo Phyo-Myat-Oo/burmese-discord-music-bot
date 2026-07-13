@@ -11,10 +11,18 @@ from .library import Library
 from .pcloud import PCloudClient, PCloudError
 
 
-async def index_pending(concurrency: int, limit: int | None, retry_failed: bool) -> None:
+async def index_pending(
+    concurrency: int, limit: int | None, retry_failed: bool, refresh_all: bool,
+    refresh_missing: bool,
+) -> None:
     library = Library(Path("data/music.db"), Path("data/music"))
     await library.initialize()
-    albums = await library.pending_pcloud_albums(retry_failed, limit)
+    if refresh_all:
+        albums = await library.all_pcloud_albums(limit)
+    elif refresh_missing:
+        albums = await library.pcloud_albums_needing_refresh(limit)
+    else:
+        albums = await library.pending_pcloud_albums(retry_failed, limit)
     total = len(albums)
     if not total:
         print("No pending pCloud albums.")
@@ -90,8 +98,12 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=6, choices=range(1, 13))
     parser.add_argument("--limit", type=int)
     parser.add_argument("--retry-failed", action="store_true")
+    parser.add_argument("--refresh-all", action="store_true", help="Refresh all album metadata")
+    parser.add_argument("--refresh-missing", action="store_true", help="Resume metadata refresh")
     args = parser.parse_args()
-    asyncio.run(index_pending(args.concurrency, args.limit, args.retry_failed))
+    asyncio.run(index_pending(
+        args.concurrency, args.limit, args.retry_failed, args.refresh_all, args.refresh_missing
+    ))
 
 
 if __name__ == "__main__":

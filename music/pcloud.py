@@ -20,6 +20,8 @@ class PCloudTrack:
     title: str
     size: int
     content_type: str
+    duration: int | None = None
+    artist: str = ""
 
 
 def extract_code(url: str) -> str | None:
@@ -65,6 +67,8 @@ class PCloudClient:
                     tracks.append(PCloudTrack(
                         file_id=int(child["fileid"]), title=name,
                         size=int(child.get("size", 0)), content_type=content_type,
+                        duration=int(child["duration"]) if child.get("duration") else None,
+                        artist=(child.get("artist") or "").strip(),
                     ))
 
         walk(metadata if metadata.get("isfolder") else {"contents": [metadata]})

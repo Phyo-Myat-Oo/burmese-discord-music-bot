@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import shutil
+import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -25,6 +28,10 @@ class QueueItem:
     uploader: str = ""
     duration: int | None = None
     thumbnail: str | None = None
+    artist: str = ""
+    cover_url: str | None = None
+    history_id: int | None = None
+    requester_id: int | None = None
 
 
 def find_ffmpeg() -> str:
@@ -42,14 +49,34 @@ def find_ffmpeg() -> str:
     raise FileNotFoundError("FFmpeg was not found. Install Gyan.FFmpeg or set FFMPEG_PATH in .env.")
 
 
+def probe_duration(source: str, ffmpeg: str) -> int | None:
+    ffprobe = str(Path(ffmpeg).with_name("ffprobe.exe" if os.name == "nt" else "ffprobe"))
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "json", source],
+            capture_output=True, text=True, timeout=20, check=True,
+        )
+        value = json.loads(result.stdout).get("format", {}).get("duration")
+        return int(float(value)) if value else None
+    except (OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+
+
 class GuildPlayer:
-    def __init__(self, guild: discord.Guild) -> None:
+    def __init__(self, guild: discord.Guild, on_start=None, on_finish=None, on_duration=None) -> None:
         self.guild = guild
         self.voice: discord.VoiceClient | None = None
         self.queue: asyncio.Queue[QueueItem] = asyncio.Queue()
         self.worker: asyncio.Task | None = None
         self.ffmpeg = find_ffmpeg()
         self.current: QueueItem | None = None
+        self.on_start = on_start
+        self.on_finish = on_finish
+        self.on_duration = on_duration
+        self.started_at: float | None = None
+        self.paused_at: float | None = None
+        self.paused_total = 0.0
+        self._was_skipped = False
 
     async def connect(self, channel: discord.VoiceChannel | discord.StageChannel) -> None:
         if self.voice and self.voice.is_connected():
@@ -68,10 +95,14 @@ class GuildPlayer:
         album: str = "", requester: str = "Unknown", track_id: int | None = None,
         source_type: str = "pcloud", source_url: str = "", uploader: str = "",
         duration: int | None = None, thumbnail: str | None = None,
+        artist: str = "", cover_url: str | None = None,
+        requester_id: int | None = None,
     ) -> int:
         await self.queue.put(QueueItem(
-            resolver, title, album, requester, track_id, source_type,
-            source_url, uploader, duration, thumbnail,
+            source=resolver, title=title, album=album, requester=requester,
+            track_id=track_id, source_type=source_type, source_url=source_url,
+            uploader=uploader, duration=duration, thumbnail=thumbnail,
+            artist=artist, cover_url=cover_url, requester_id=requester_id,
         ))
         if not self.worker or self.worker.done():
             self.worker = asyncio.create_task(self._run())
@@ -85,10 +116,18 @@ class GuildPlayer:
                 await self.close()
                 return
             self.current = item
+            self._was_skipped = False
             try:
                 finished = asyncio.Event()
                 loop = asyncio.get_running_loop()
                 source_value = await item.source() if callable(item.source) else str(item.source)
+                if item.duration is None:
+                    item.duration = await asyncio.to_thread(probe_duration, source_value, self.ffmpeg)
+                    if item.duration and self.on_duration:
+                        try:
+                            await self.on_duration(item)
+                        except Exception:
+                            LOGGER.exception("Could not cache duration for %s", item.title)
                 source = discord.FFmpegOpusAudio(
                     source_value,
                     executable=self.ffmpeg,
@@ -102,26 +141,46 @@ class GuildPlayer:
                     loop.call_soon_threadsafe(finished.set)
 
                 self.voice.play(source, after=after)
+                self.started_at = time.monotonic()
+                self.paused_at = None
+                self.paused_total = 0.0
+                if self.on_start:
+                    try:
+                        item.history_id = await self.on_start(item)
+                    except Exception:
+                        LOGGER.exception("Could not record history for %s", item.title)
                 await finished.wait()
             except Exception:
                 LOGGER.exception("Could not start playback for %s", item.title)
             finally:
+                if self.on_finish and item.history_id:
+                    try:
+                        await self.on_finish(item, not self._was_skipped)
+                    except Exception:
+                        LOGGER.exception("Could not complete history for %s", item.title)
                 self.current = None
+                self.started_at = None
+                self.paused_at = None
                 self.queue.task_done()
 
     def skip(self) -> None:
         if self.voice and self.voice.is_playing():
+            self._was_skipped = True
             self.voice.stop()
 
     def pause(self) -> bool:
         if self.voice and self.voice.is_playing():
             self.voice.pause()
+            self.paused_at = time.monotonic()
             return True
         return False
 
     def resume(self) -> bool:
         if self.voice and self.voice.is_paused():
             self.voice.resume()
+            if self.paused_at:
+                self.paused_total += time.monotonic() - self.paused_at
+            self.paused_at = None
             return True
         return False
 
@@ -141,6 +200,13 @@ class GuildPlayer:
     @property
     def is_paused(self) -> bool:
         return bool(self.voice and self.voice.is_paused())
+
+    @property
+    def elapsed(self) -> int:
+        if self.started_at is None:
+            return 0
+        end = self.paused_at if self.paused_at else time.monotonic()
+        return max(0, int(end - self.started_at - self.paused_total))
 
     async def close(self) -> None:
         self.stop()
