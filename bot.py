@@ -147,6 +147,16 @@ async def queue_pcloud_track(interaction: discord.Interaction, track) -> str:
     )
 
 
+async def queue_pcloud_album(interaction: discord.Interaction, album) -> int:
+    """Queue every indexed track in an album, preserving pCloud file order."""
+    tracks = await bot.library.album_playback_tracks(album["id"])
+    if not tracks:
+        raise ValueError("That album has no playable tracks.")
+    for track in tracks:
+        await queue_pcloud_track(interaction, track)
+    return len(tracks)
+
+
 async def queue_youtube_track(interaction: discord.Interaction, result: YouTubeResult) -> str:
     member = interaction.user
     if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:
@@ -542,6 +552,22 @@ class AlbumTrackView(discord.ui.View):
         view.page = self.album_page
         await interaction.response.edit_message(embed=await view.render(), view=view)
 
+    @discord.ui.button(label="Play Album", emoji="▶️", style=discord.ButtonStyle.success, row=2)
+    async def play_album(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        album = await bot.library.album_by_id(self.album_id)
+        if not album:
+            await interaction.response.send_message("That album no longer exists.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            count = await queue_pcloud_album(interaction, album)
+        except ValueError as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await interaction.followup.send(
+            f"Queued the full album **{album['title']}** with {count} tracks."
+        )
+
 
 class FavoriteSelect(discord.ui.Select):
     def __init__(self, rows) -> None:
@@ -859,6 +885,30 @@ async def playlist_play(
 
 
 bot.tree.add_command(playlist_group)
+
+
+album_group = app_commands.Group(name="album", description="Play an indexed album")
+
+
+@album_group.command(name="play", description="Queue every track in an indexed album")
+@app_commands.describe(name="Album title")
+async def album_play(interaction: discord.Interaction, name: str) -> None:
+    album = await bot.library.find_pcloud_album(name.strip())
+    if not album:
+        await interaction.response.send_message("That album is not indexed yet.", ephemeral=True)
+        return
+    await interaction.response.defer(thinking=True)
+    try:
+        count = await queue_pcloud_album(interaction, album)
+    except ValueError as exc:
+        await interaction.followup.send(str(exc), ephemeral=True)
+        return
+    await interaction.followup.send(
+        f"Queued the full album **{album['title']}** with {count} tracks."
+    )
+
+
+bot.tree.add_command(album_group)
 
 
 @bot.tree.command(description="Index new albums from Phyu Ni War Pyar")
@@ -1282,11 +1332,27 @@ async def artist_autocomplete(
     return [app_commands.Choice(name=row["artist"][:100],value=row["artist"][:100]) for row in rows]
 
 
+async def album_autocomplete(
+    interaction: discord.Interaction, current: str,
+) -> list[app_commands.Choice[str]]:
+    if not current.strip():
+        return []
+    rows = await bot.library.autocomplete_albums(current, 25)
+    return [
+        app_commands.Choice(
+            name=f"{row['title']} ({row['track_count']} tracks)"[:100],
+            value=row["title"][:100],
+        )
+        for row in rows
+    ]
+
+
 play.autocomplete("query")(track_autocomplete)
 playlist_add.autocomplete("query")(track_autocomplete)
 random.autocomplete("artist")(artist_autocomplete)
 randomalbum.autocomplete("artist")(artist_autocomplete)
 artists.autocomplete("filter_text")(artist_autocomplete)
+album_play.autocomplete("name")(album_autocomplete)
 
 
 @bot.event

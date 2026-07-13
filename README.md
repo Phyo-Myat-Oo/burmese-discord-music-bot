@@ -63,6 +63,7 @@ Use `--retry-failed` later to retry albums whose links were unavailable.
 - `/top songs`, `/top artists`, `/my stats`: listening charts and statistics
 - `/favorite`, `/unfavorite`, `/favorites`: manage personal pCloud and YouTube songs
 - `/random`, `/randomalbum`: discover a random song or queue a random album
+- `/album play`: queue every indexed song in a chosen album, in track order
 - `/status`: show uptime, latency, catalogue size, sync state, and FFmpeg health
 - `/pause`, `/resume`, `/skip`, `/stop`, `/leave`: playback controls
 
@@ -78,6 +79,9 @@ for quick use; use `/search` to select an exact track.
 The now-playing panel shows artist, album, cover art, source link, requester,
 duration, and an elapsed progress bar. Missing pCloud durations are probed once
 with FFprobe on first playback and cached in SQLite.
+
+When browsing an artist's album, select it and use **Play Album** to queue its
+entire track list. `/album play` also offers matching album-title suggestions.
 
 Artists use normalized `artists`, `album_artists`, and `track_artists`
 relationships. Embedded pCloud artist tags supplement album-title parsing for

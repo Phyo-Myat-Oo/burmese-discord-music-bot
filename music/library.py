@@ -669,12 +669,44 @@ class Library:
                 ORDER BY RANDOM() LIMIT 1
             """, params).fetchone()
 
-    async def album_playback_tracks(self, album_id: int, limit: int = 100):
-        return await asyncio.to_thread(self._album_playback_tracks, album_id, limit)
+    async def find_pcloud_album(self, query: str):
+        return await asyncio.to_thread(self._find_pcloud_album, query)
 
-    def _album_playback_tracks(self, album_id: int, limit: int):
+    def _find_pcloud_album(self, query: str):
+        key = search_key(query)
         with closing(self._connect()) as db, db:
             return db.execute("""
+                SELECT a.id,COALESCE(a.display_title,a.title) AS title,COUNT(t.id) AS track_count
+                FROM pcloud_albums a JOIN pcloud_tracks t ON t.album_id=a.id
+                WHERE a.search_key LIKE ? AND a.error IS NULL
+                GROUP BY a.id
+                ORDER BY CASE WHEN a.search_key=? THEN 0 WHEN a.search_key LIKE ? THEN 1 ELSE 2 END,
+                         a.display_title
+                LIMIT 1
+            """, (f"%{key}%", key, f"{key}%")).fetchone()
+
+    async def autocomplete_albums(self, query: str, limit: int = 25):
+        return await asyncio.to_thread(self._autocomplete_albums, query, limit)
+
+    def _autocomplete_albums(self, query: str, limit: int):
+        key = search_key(query)
+        with closing(self._connect()) as db, db:
+            return db.execute("""
+                SELECT a.id,COALESCE(a.display_title,a.title) AS title,COUNT(t.id) AS track_count
+                FROM pcloud_albums a JOIN pcloud_tracks t ON t.album_id=a.id
+                WHERE a.search_key LIKE ? AND a.error IS NULL
+                GROUP BY a.id
+                ORDER BY CASE WHEN a.search_key=? THEN 0 WHEN a.search_key LIKE ? THEN 1 ELSE 2 END,
+                         a.display_title
+                LIMIT ?
+            """, (f"%{key}%", key, f"{key}%", limit)).fetchall()
+
+    async def album_playback_tracks(self, album_id: int, limit: int | None = None):
+        return await asyncio.to_thread(self._album_playback_tracks, album_id, limit)
+
+    def _album_playback_tracks(self, album_id: int, limit: int | None):
+        with closing(self._connect()) as db, db:
+            sql = """
                 SELECT t.id,t.display_title AS title,t.file_id,a.code,a.display_title AS album_title,
                        t.duration,a.post_url,p.cover_url,
                        COALESCE(NULLIF(t.artist_text,''),GROUP_CONCAT(ar.name,'၊ ')) AS artist
@@ -682,8 +714,11 @@ class Library:
                 LEFT JOIN posts p ON p.url=a.post_url
                 LEFT JOIN album_artists aa ON aa.album_id=a.id
                 LEFT JOIN artists ar ON ar.id=aa.artist_id
-                WHERE t.album_id=? GROUP BY t.id ORDER BY t.file_id LIMIT ?
-            """, (album_id, limit)).fetchall()
+                WHERE t.album_id=? GROUP BY t.id ORDER BY t.file_id
+            """
+            if limit is not None:
+                return db.execute(sql + " LIMIT ?", (album_id, limit)).fetchall()
+            return db.execute(sql, (album_id,)).fetchall()
 
     async def catalogue_stats(self) -> dict[str, int]:
         return await asyncio.to_thread(self._catalogue_stats)

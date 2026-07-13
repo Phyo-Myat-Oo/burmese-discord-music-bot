@@ -60,6 +60,13 @@ class LibraryFeatureTests(unittest.IsolatedAsyncioTestCase):
     async def test_normalized_artist_relationship(self):
         artists = await self.library.list_artists("မာမာ", 10, 0)
         self.assertEqual(artists[0]["artist"], "မာမာအေး")
+
+    async def test_album_lookup_and_suggestions_are_playable(self):
+        album = await self.library.random_album()
+        found = await self.library.find_pcloud_album(album["title"])
+        suggestions = await self.library.autocomplete_albums(album["title"])
+        self.assertEqual(found["id"], album["id"])
+        self.assertEqual(suggestions[0]["id"], album["id"])
         self.assertEqual(await self.library.count_albums_by_artist("မာမာအေး"), 1)
         track = await self.library.random_track("မာမာအေး")
         self.assertEqual(track["duration"], 240)
