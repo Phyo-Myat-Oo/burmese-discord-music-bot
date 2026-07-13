@@ -40,12 +40,13 @@ Use `--retry-failed` later to retry albums whose links were unavailable.
 
 - `/sync`: index 100 recent posts and their pCloud tracks (DJ/admin only)
 - `/search`: browse all matching tracks with pages and an exact-play dropdown
+- `/youtube`: search YouTube or use a YouTube URL, then select an exact result
 - `/artists`: browse Artist → Album → Track and queue an exact song
 - Artist and album views include Back buttons that preserve the previous page
 - `/scan_music`: register audio files placed below `data/music` (DJ/admin only)
 - `/play`: request a fresh pCloud URL and stream the first matching track
 - `/queue`, `/nowplaying`: show queue state and playback control buttons
-- `/favorite`, `/unfavorite`, `/favorites`: manage personal saved songs
+- `/favorite`, `/unfavorite`, `/favorites`: manage personal pCloud and YouTube songs
 - `/random`, `/randomalbum`: discover a random song or queue a random album
 - `/status`: show uptime, latency, catalogue size, sync state, and FFmpeg health
 - `/pause`, `/resume`, `/skip`, `/stop`, `/leave`: playback controls
@@ -62,3 +63,8 @@ for quick use; use `/search` to select an exact track.
 The bot checks the 100 newest Blogspot posts every `SYNC_INTERVAL_HOURS`
 (default: 6). Only new or edited posts have their pCloud folders refreshed.
 MediaFire support is not implemented.
+
+YouTube favorites store only video metadata and the original URL. When replayed,
+a fresh audio URL is requested. YouTube results are resolved only when playback
+starts. Videos are not permanently downloaded. Keep `yt-dlp` updated because
+YouTube playback extraction changes regularly.

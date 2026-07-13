@@ -17,6 +17,7 @@ from music.library import Library
 from music.pcloud import PCloudClient
 from music.player import GuildPlayer, find_ffmpeg
 from music.scraper import SiteScraper
+from music.youtube import YouTubeClient, YouTubeError, YouTubeResult, is_youtube_url
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -112,6 +113,86 @@ async def queue_pcloud_track(interaction: discord.Interaction, track) -> str:
         f"Queued **{track['title']}**\nAlbum: {track['album_title']}\n"
         f"Queue position: {position}"
     )
+
+
+async def queue_youtube_track(interaction: discord.Interaction, result: YouTubeResult) -> str:
+    member = interaction.user
+    if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:
+        raise ValueError("Join a voice channel first.")
+    if not interaction.guild:
+        raise ValueError("Music playback is only available in a server.")
+    player = bot.player(interaction.guild)
+    await player.connect(member.voice.channel)
+
+    async def resolve() -> str:
+        return await YouTubeClient.stream_url(result.url)
+
+    position = await player.enqueue_stream(
+        resolve, result.title, f"YouTube • {result.uploader}", member.display_name,
+        source_type="youtube", source_url=result.url, uploader=result.uploader,
+        duration=result.duration, thumbnail=result.thumbnail,
+    )
+    return (
+        f"Queued **{result.title}**\nChannel: {result.uploader}\n"
+        f"Duration: {result.duration_text}\nQueue position: {position}"
+    )
+
+
+class YouTubeSelect(discord.ui.Select):
+    def __init__(self, results: list[YouTubeResult]) -> None:
+        options = [
+            discord.SelectOption(
+                label=result.title[:100],
+                description=f"{result.uploader} • {result.duration_text}"[:100],
+                value=result.url,
+            )
+            for result in results
+        ]
+        super().__init__(placeholder="Choose a YouTube song", options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: YouTubeSearchView = self.view  # type: ignore[assignment]
+        result = next((item for item in view.results if item.url == self.values[0]), None)
+        if not result:
+            await interaction.response.send_message("That result expired. Search again.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            message = await queue_youtube_track(interaction, result)
+        except (ValueError, YouTubeError) as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await interaction.followup.send(message, ephemeral=True)
+
+
+class YouTubeSearchView(discord.ui.View):
+    def __init__(self, results: list[YouTubeResult], owner_id: int) -> None:
+        super().__init__(timeout=300)
+        self.results = results
+        self.owner_id = owner_id
+        self.add_item(YouTubeSelect(results))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id == self.owner_id:
+            return True
+        await interaction.response.send_message("Run your own `/youtube` search.", ephemeral=True)
+        return False
+
+    def embed(self, query: str) -> discord.Embed:
+        lines = [
+            f"**{index}. [{result.title}]({result.url})**\n"
+            f"{result.uploader} • {result.duration_text}"
+            for index, result in enumerate(self.results, 1)
+        ]
+        embed = discord.Embed(
+            title=f"YouTube: {query}"[:256],
+            description="\n\n".join(lines),
+            color=discord.Color.red(),
+        )
+        if self.results[0].thumbnail:
+            embed.set_thumbnail(url=self.results[0].thumbnail)
+        embed.set_footer(text="Select a result below • Streams without permanent download")
+        return embed
 
 
 class TrackSelect(discord.ui.Select):
@@ -429,6 +510,39 @@ class AlbumTrackView(discord.ui.View):
         await interaction.response.edit_message(embed=await view.render(), view=view)
 
 
+class FavoriteSelect(discord.ui.Select):
+    def __init__(self, rows) -> None:
+        options = [
+            discord.SelectOption(
+                label=row["title"][:100],
+                description=row["album_title"][:100],
+                value=str(index),
+                emoji="▶️" if row["source_type"] == "youtube" else "🎵",
+            )
+            for index, row in enumerate(rows)
+        ]
+        super().__init__(placeholder="Choose a favorite to play", options=options, row=0)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: FavoriteTracksView = self.view  # type: ignore[assignment]
+        row = view.rows[int(self.values[0])]
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            if row["source_type"] == "youtube":
+                result = YouTubeResult(
+                    row["title"], row["source_url"], row["uploader"],
+                    row["duration"], row["thumbnail"],
+                )
+                message = await queue_youtube_track(interaction, result)
+            else:
+                track = await bot.library.pcloud_track_by_id(int(row["source_id"]))
+                message = await queue_pcloud_track(interaction, track)
+        except (ValueError, YouTubeError) as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await interaction.followup.send(message, ephemeral=True)
+
+
 class FavoriteTracksView(discord.ui.View):
     PAGE_SIZE = 20
 
@@ -437,6 +551,7 @@ class FavoriteTracksView(discord.ui.View):
         self.owner_id = owner_id
         self.page = 0
         self.total = 0
+        self.rows = []
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id == self.owner_id:
@@ -451,11 +566,12 @@ class FavoriteTracksView(discord.ui.View):
         rows = await bot.library.list_favorites(
             self.owner_id, self.PAGE_SIZE, self.page * self.PAGE_SIZE
         )
+        self.rows = rows
         for child in list(self.children):
-            if isinstance(child, TrackSelect):
+            if isinstance(child, FavoriteSelect):
                 self.remove_item(child)
         if rows:
-            self.add_item(TrackSelect(rows))
+            self.add_item(FavoriteSelect(rows))
         self.previous.disabled = self.page == 0
         self.next.disabled = self.page >= pages - 1
         lines = [
@@ -536,10 +652,19 @@ class PlayerControlsView(discord.ui.View):
     @discord.ui.button(label="Favorite", emoji="❤️", style=discord.ButtonStyle.secondary)
     async def favorite_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         player = bot.player(interaction.guild)  # type: ignore[arg-type]
-        if not player.current or player.current.track_id is None:
+        item = player.current
+        if not item:
             await interaction.response.send_message("Nothing is playing.", ephemeral=True)
             return
-        added = await bot.library.add_favorite(interaction.user.id, player.current.track_id)
+        if item.source_type == "youtube":
+            added = await bot.library.add_youtube_favorite(
+                interaction.user.id, item.source_url, item.title, item.uploader,
+                item.duration, item.thumbnail,
+            )
+        elif item.track_id is not None:
+            added = await bot.library.add_favorite(interaction.user.id, item.track_id)
+        else:
+            added = False
         await interaction.response.send_message(
             "Added to your favorites." if added else "That song is already a favorite.",
             ephemeral=True,
@@ -568,6 +693,27 @@ async def search(interaction: discord.Interaction, query: str) -> None:
         await interaction.response.send_message("No matching indexed tracks. Ask a DJ to run `/sync`.", ephemeral=True)
         return
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+@bot.tree.command(description="Search or play a YouTube song")
+@app_commands.describe(query="YouTube URL or song name")
+async def youtube(interaction: discord.Interaction, query: str) -> None:
+    query = query.strip()
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        results = await YouTubeClient.search(query, limit=10)
+    except YouTubeError as exc:
+        logging.warning("YouTube search failed: %s", exc)
+        await interaction.followup.send(
+            "YouTube could not return playable results. Try another search or update yt-dlp.",
+            ephemeral=True,
+        )
+        return
+    if not results:
+        await interaction.followup.send("No YouTube results found.", ephemeral=True)
+        return
+    view = YouTubeSearchView(results, interaction.user.id)
+    await interaction.followup.send(embed=view.embed(query), view=view, ephemeral=True)
 
 
 @bot.tree.command(description="Browse artists, then choose a song")
@@ -618,6 +764,33 @@ def selected_or_current_track(interaction: discord.Interaction, query: str = "")
 @bot.tree.command(description="Add a song or the current song to your favorites")
 @app_commands.describe(query="Optional song name; omit to favorite the current song")
 async def favorite(interaction: discord.Interaction, query: str = "") -> None:
+    if is_youtube_url(query.strip()):
+        try:
+            result = (await YouTubeClient.search(query.strip(), limit=1))[0]
+        except (YouTubeError, IndexError):
+            await interaction.response.send_message("Could not read that YouTube video.", ephemeral=True)
+            return
+        added = await bot.library.add_youtube_favorite(
+            interaction.user.id, result.url, result.title, result.uploader,
+            result.duration, result.thumbnail,
+        )
+        await interaction.response.send_message(
+            f"Added **{result.title}** to your favorites." if added
+            else f"**{result.title}** is already a favorite.", ephemeral=True,
+        )
+        return
+    if not query.strip() and interaction.guild:
+        current = bot.player(interaction.guild).current
+        if current and current.source_type == "youtube":
+            added = await bot.library.add_youtube_favorite(
+                interaction.user.id, current.source_url, current.title, current.uploader,
+                current.duration, current.thumbnail,
+            )
+            await interaction.response.send_message(
+                f"Added **{current.title}** to your favorites." if added
+                else f"**{current.title}** is already a favorite.", ephemeral=True,
+            )
+            return
     track = await selected_or_current_track(interaction, query)
     if not track:
         await interaction.response.send_message("No matching or currently playing track.", ephemeral=True)
@@ -633,6 +806,28 @@ async def favorite(interaction: discord.Interaction, query: str = "") -> None:
 @bot.tree.command(description="Remove a song or the current song from your favorites")
 @app_commands.describe(query="Optional song name; omit to remove the current song")
 async def unfavorite(interaction: discord.Interaction, query: str = "") -> None:
+    if is_youtube_url(query.strip()):
+        try:
+            canonical_url = (await YouTubeClient.search(query.strip(), limit=1))[0].url
+        except (YouTubeError, IndexError):
+            canonical_url = query.strip()
+        removed = await bot.library.remove_youtube_favorite(interaction.user.id, canonical_url)
+        await interaction.response.send_message(
+            "Removed the YouTube song from your favorites." if removed
+            else "That YouTube song was not in your favorites.", ephemeral=True,
+        )
+        return
+    if not query.strip() and interaction.guild:
+        current = bot.player(interaction.guild).current
+        if current and current.source_type == "youtube":
+            removed = await bot.library.remove_youtube_favorite(
+                interaction.user.id, current.source_url
+            )
+            await interaction.response.send_message(
+                f"Removed **{current.title}** from your favorites." if removed
+                else "That song was not in your favorites.", ephemeral=True,
+            )
+            return
     track = await selected_or_current_track(interaction, query)
     if not track:
         await interaction.response.send_message("No matching or currently playing track.", ephemeral=True)

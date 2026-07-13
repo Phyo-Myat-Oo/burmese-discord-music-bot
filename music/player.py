@@ -20,6 +20,11 @@ class QueueItem:
     album: str = ""
     requester: str = "Unknown"
     track_id: int | None = None
+    source_type: str = "pcloud"
+    source_url: str = ""
+    uploader: str = ""
+    duration: int | None = None
+    thumbnail: str | None = None
 
 
 def find_ffmpeg() -> str:
@@ -61,8 +66,13 @@ class GuildPlayer:
     async def enqueue_stream(
         self, resolver: Callable[[], Awaitable[str]], title: str,
         album: str = "", requester: str = "Unknown", track_id: int | None = None,
+        source_type: str = "pcloud", source_url: str = "", uploader: str = "",
+        duration: int | None = None, thumbnail: str | None = None,
     ) -> int:
-        await self.queue.put(QueueItem(resolver, title, album, requester, track_id))
+        await self.queue.put(QueueItem(
+            resolver, title, album, requester, track_id, source_type,
+            source_url, uploader, duration, thumbnail,
+        ))
         if not self.worker or self.worker.done():
             self.worker = asyncio.create_task(self._run())
         return self.queue.qsize() + (1 if self.current else 0)

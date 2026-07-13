@@ -38,6 +38,20 @@ class LibraryFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(tracks), 1)
         self.assertEqual(tracks[0]["title"], "စမ်းသပ်သီချင်း")
 
+    async def test_youtube_and_pcloud_favorites_share_one_list(self):
+        track = await self.library.random_track("မာမာအေး")
+        await self.library.add_favorite(456, track["id"])
+        added = await self.library.add_youtube_favorite(
+            456, "https://youtu.be/example", "YouTube Song", "Channel", 240, None
+        )
+        self.assertTrue(added)
+        self.assertEqual(await self.library.count_favorites(456), 2)
+        rows = await self.library.list_favorites(456)
+        self.assertEqual({row["source_type"] for row in rows}, {"pcloud", "youtube"})
+        self.assertTrue(
+            await self.library.remove_youtube_favorite(456, "https://youtu.be/example")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -57,10 +57,22 @@ class Library:
                     PRIMARY KEY(user_id,track_id),
                     FOREIGN KEY(track_id) REFERENCES pcloud_tracks(id) ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS youtube_favorites (
+                    user_id TEXT NOT NULL,
+                    video_url TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    uploader TEXT NOT NULL,
+                    duration INTEGER,
+                    thumbnail TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(user_id,video_url)
+                );
                 CREATE INDEX IF NOT EXISTS idx_posts_title ON posts(title);
                 CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
                 CREATE INDEX IF NOT EXISTS idx_pcloud_tracks_title ON pcloud_tracks(title);
                 CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id,created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_youtube_favorites_user
+                    ON youtube_favorites(user_id,created_at DESC);
             """)
             self._ensure_column(db, "posts", "source_updated", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(db, "pcloud_albums", "display_title", "TEXT")
@@ -363,14 +375,50 @@ class Library:
             )
             return cursor.rowcount > 0
 
+    async def add_youtube_favorite(
+        self, user_id: int, video_url: str, title: str, uploader: str,
+        duration: int | None, thumbnail: str | None,
+    ) -> bool:
+        return await asyncio.to_thread(
+            self._add_youtube_favorite, str(user_id), video_url, title,
+            uploader, duration, thumbnail,
+        )
+
+    def _add_youtube_favorite(
+        self, user_id: str, video_url: str, title: str, uploader: str,
+        duration: int | None, thumbnail: str | None,
+    ) -> bool:
+        with closing(self._connect()) as db, db:
+            cursor = db.execute("""
+                INSERT OR IGNORE INTO youtube_favorites(
+                    user_id,video_url,title,uploader,duration,thumbnail
+                ) VALUES(?,?,?,?,?,?)
+            """, (user_id, video_url, title, uploader, duration, thumbnail))
+            return cursor.rowcount > 0
+
+    async def remove_youtube_favorite(self, user_id: int, video_url: str) -> bool:
+        return await asyncio.to_thread(self._remove_youtube_favorite, str(user_id), video_url)
+
+    def _remove_youtube_favorite(self, user_id: str, video_url: str) -> bool:
+        with closing(self._connect()) as db, db:
+            cursor = db.execute(
+                "DELETE FROM youtube_favorites WHERE user_id=? AND video_url=?",
+                (user_id, video_url),
+            )
+            return cursor.rowcount > 0
+
     async def count_favorites(self, user_id: int) -> int:
         return await asyncio.to_thread(self._count_favorites, str(user_id))
 
     def _count_favorites(self, user_id: str) -> int:
         with closing(self._connect()) as db, db:
-            return db.execute(
+            pcloud = db.execute(
                 "SELECT COUNT(1) FROM favorites WHERE user_id=?", (user_id,)
             ).fetchone()[0]
+            youtube = db.execute(
+                "SELECT COUNT(1) FROM youtube_favorites WHERE user_id=?", (user_id,)
+            ).fetchone()[0]
+            return pcloud + youtube
 
     async def list_favorites(self, user_id: int, limit: int = 20, offset: int = 0):
         return await asyncio.to_thread(self._list_favorites, str(user_id), limit, offset)
@@ -378,11 +426,19 @@ class Library:
     def _list_favorites(self, user_id: str, limit: int, offset: int):
         with closing(self._connect()) as db, db:
             return db.execute("""
-                SELECT t.id,t.display_title AS title,a.display_title AS album_title
-                FROM favorites f JOIN pcloud_tracks t ON t.id=f.track_id
-                JOIN pcloud_albums a ON a.id=t.album_id
-                WHERE f.user_id=? ORDER BY f.created_at DESC LIMIT ? OFFSET ?
-            """, (user_id, limit, offset)).fetchall()
+                SELECT * FROM (
+                    SELECT 'pcloud' AS source_type,CAST(t.id AS TEXT) AS source_id,
+                           t.display_title AS title,a.display_title AS album_title,
+                           NULL AS source_url,NULL AS uploader,NULL AS duration,
+                           NULL AS thumbnail,f.created_at
+                    FROM favorites f JOIN pcloud_tracks t ON t.id=f.track_id
+                    JOIN pcloud_albums a ON a.id=t.album_id WHERE f.user_id=?
+                    UNION ALL
+                    SELECT 'youtube',video_url,title,'YouTube • ' || uploader,
+                           video_url,uploader,duration,thumbnail,created_at
+                    FROM youtube_favorites WHERE user_id=?
+                ) ORDER BY created_at DESC LIMIT ? OFFSET ?
+            """, (user_id, user_id, limit, offset)).fetchall()
 
     async def random_track(self, artist: str = ""):
         return await asyncio.to_thread(self._random_track, artist)
@@ -438,7 +494,10 @@ class Library:
                 "albums": db.execute("SELECT COUNT(1) FROM pcloud_albums WHERE error IS NULL").fetchone()[0],
                 "tracks": db.execute("SELECT COUNT(1) FROM pcloud_tracks").fetchone()[0],
                 "failed": db.execute("SELECT COUNT(1) FROM pcloud_albums WHERE error IS NOT NULL").fetchone()[0],
-                "favorites": db.execute("SELECT COUNT(1) FROM favorites").fetchone()[0],
+                "favorites": (
+                    db.execute("SELECT COUNT(1) FROM favorites").fetchone()[0]
+                    + db.execute("SELECT COUNT(1) FROM youtube_favorites").fetchone()[0]
+                ),
             }
 
     async def source_updates(self, urls: list[str]) -> dict[str, str]:
