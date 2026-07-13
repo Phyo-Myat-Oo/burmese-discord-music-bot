@@ -1,4 +1,4 @@
-# Phyu Ni War Pyar Discord Music Bot
+# Daisy Discord Music Bot
 
 An authorized, self-hosted Discord bot that indexes Burmese music posts,
 catalogues their pCloud folders, and streams tracks with FFmpeg.
