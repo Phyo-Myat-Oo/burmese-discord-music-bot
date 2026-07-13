@@ -137,7 +137,10 @@ class GuildPlayer:
                         except Exception:
                             LOGGER.exception("Could not cache duration for %s", item.title)
 
-                before_opts = "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_at_eof 1 -reconnect_delay_max 5"
+                before_opts = (
+                    "-nostdin -hide_banner -loglevel error -reconnect 1 "
+                    "-reconnect_streamed 1 -reconnect_at_eof 1 -reconnect_delay_max 5"
+                )
                 if headers:
                     header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
                     before_opts = f'-headers {shlex.quote(header_str)} ' + before_opts
