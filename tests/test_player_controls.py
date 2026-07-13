@@ -63,6 +63,19 @@ class PlayerControlTests(unittest.TestCase):
         self.assertEqual(self.player.current.title, "Current")
         self.assertEqual(self.player.repeat_mode, "off")
 
+    def test_move_queue_item_reorders_upcoming_tracks_only(self):
+        self.player.current = item("Current")
+        self.player.queue.put_nowait(item("First"))
+        self.player.queue.put_nowait(item("Second"))
+        self.player.queue.put_nowait(item("Third"))
+
+        self.assertEqual(self.player.move_queue_item(2, -1), 1)
+        self.assertEqual(
+            [entry.title for entry in self.player.upcoming(None)], ["First", "Third", "Second"]
+        )
+        self.assertIsNone(self.player.move_queue_item(0, -1))
+        self.assertEqual(self.player.current.title, "Current")
+
 
 if __name__ == "__main__":
     unittest.main()

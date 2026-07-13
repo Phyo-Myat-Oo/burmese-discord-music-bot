@@ -57,7 +57,8 @@ Use `--retry-failed` later to retry albums whose links were unavailable.
 - Artist and album views include Back buttons that preserve the previous page
 - `/scan_music`: register audio files placed below `data/music` (DJ/admin only)
 - `/play`: request a fresh pCloud URL and stream the first matching track
-- `/queue`, `/nowplaying`: show queue state and playback control buttons
+- `/queue`: browse upcoming songs, select one, and move it up or down
+- `/nowplaying`: show queue state and playback control buttons
 - `/playlist create|add|remove|play`, `/playlists`: personal and server playlists
 - `/history`, `/recent`: personal and server listening history
 - `/top songs`, `/top artists`, `/my stats`: listening charts and statistics

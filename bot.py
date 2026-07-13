@@ -790,6 +790,111 @@ class PlayerControlsView(discord.ui.View):
         await interaction.response.edit_message(embed=now_playing_embed(player), view=self)
 
 
+class QueueSelect(discord.ui.Select):
+    def __init__(self, items, offset: int, selected_index: int | None) -> None:
+        options = [
+            discord.SelectOption(
+                label=f"{offset + index + 1}. {item.title}"[:100],
+                description=f"Requested by {item.requester}"[:100],
+                value=str(offset + index),
+                default=(offset + index == selected_index),
+            )
+            for index, item in enumerate(items)
+        ]
+        super().__init__(placeholder="Select an upcoming track to reorder", options=options, row=0)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: QueueReorderView = self.view  # type: ignore[assignment]
+        view.selected_index = int(self.values[0])
+        await interaction.response.edit_message(embed=view.render(), view=view)
+
+
+class QueueReorderView(discord.ui.View):
+    PAGE_SIZE = 25
+
+    def __init__(self, guild: discord.Guild) -> None:
+        super().__init__(timeout=900)
+        self.guild = guild
+        self.page = 0
+        self.selected_index: int | None = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return False
+        player = bot.player(interaction.guild)
+        if not interaction.user.voice or not player.voice or interaction.user.voice.channel != player.voice.channel:
+            await interaction.response.send_message(
+                "Join Daisy's voice channel to reorder the queue.", ephemeral=True
+            )
+            return False
+        return True
+
+    def render(self) -> discord.Embed:
+        player = bot.player(self.guild)
+        items = player.upcoming(None)
+        pages = max(1, math.ceil(len(items) / self.PAGE_SIZE))
+        self.page = min(max(self.page, 0), pages - 1)
+        start = self.page * self.PAGE_SIZE
+        page_items = items[start:start + self.PAGE_SIZE]
+        if self.selected_index is not None and self.selected_index >= len(items):
+            self.selected_index = None
+
+        for child in list(self.children):
+            if isinstance(child, QueueSelect):
+                self.remove_item(child)
+        if page_items:
+            self.add_item(QueueSelect(page_items, start, self.selected_index))
+
+        self.move_up.disabled = self.selected_index is None or self.selected_index == 0
+        self.move_down.disabled = (
+            self.selected_index is None or self.selected_index >= len(items) - 1
+        )
+        self.previous_page.disabled = self.page == 0
+        self.next_page.disabled = self.page >= pages - 1
+
+        lines = []
+        if player.current:
+            lines.append(f"**Now:** {player.current.title} — requested by {player.current.requester}")
+        lines.extend(
+            f"**{start + index}.** {item.title} — {item.requester}"
+            for index, item in enumerate(page_items, 1)
+        )
+        selected = (
+            f"Selected: #{self.selected_index + 1}" if self.selected_index is not None
+            else "Select an upcoming song to move it."
+        )
+        embed = discord.Embed(
+            title="Music queue", description="\n".join(lines) or "The queue is empty.",
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text=f"{selected} • Page {self.page + 1}/{pages}")
+        return embed
+
+    @discord.ui.button(label="Move Up", emoji="⬆️", style=discord.ButtonStyle.primary, row=1)
+    async def move_up(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        player = bot.player(interaction.guild)  # type: ignore[arg-type]
+        if self.selected_index is not None:
+            self.selected_index = player.move_queue_item(self.selected_index, -1)
+        await interaction.response.edit_message(embed=self.render(), view=self)
+
+    @discord.ui.button(label="Move Down", emoji="⬇️", style=discord.ButtonStyle.primary, row=1)
+    async def move_down(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        player = bot.player(interaction.guild)  # type: ignore[arg-type]
+        if self.selected_index is not None:
+            self.selected_index = player.move_queue_item(self.selected_index, 1)
+        await interaction.response.edit_message(embed=self.render(), view=self)
+
+    @discord.ui.button(label="Previous Page", style=discord.ButtonStyle.secondary, row=2)
+    async def previous_page(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page -= 1
+        await interaction.response.edit_message(embed=self.render(), view=self)
+
+    @discord.ui.button(label="Next Page", style=discord.ButtonStyle.secondary, row=2)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page += 1
+        await interaction.response.edit_message(embed=self.render(), view=self)
+
+
 playlist_group = app_commands.Group(name="playlist", description="Manage personal or server playlists")
 
 
@@ -1235,20 +1340,8 @@ bot.tree.add_command(my_group)
 async def show_queue(interaction: discord.Interaction) -> None:
     if not interaction.guild:
         return
-    player = bot.player(interaction.guild)
-    lines = []
-    if player.current:
-        lines.append(f"**Now:** {player.current.title} — requested by {player.current.requester}")
-    for index, item in enumerate(player.upcoming(10), 1):
-        lines.append(f"**{index}.** {item.title} — {item.requester}")
-    if player.queue.qsize() > 10:
-        lines.append(f"…and {player.queue.qsize() - 10} more")
-    embed = discord.Embed(
-        title="Music queue",
-        description="\n".join(lines) or "The queue is empty.",
-        color=discord.Color.blurple(),
-    )
-    await interaction.response.send_message(embed=embed, view=PlayerControlsView())
+    view = QueueReorderView(interaction.guild)
+    await interaction.response.send_message(embed=view.render(), view=view)
 
 
 @bot.tree.command(description="Show the current song and playback controls")

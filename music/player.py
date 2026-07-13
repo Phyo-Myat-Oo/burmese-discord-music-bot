@@ -262,8 +262,18 @@ class GuildPlayer:
         if self.voice and (self.voice.is_playing() or self.voice.is_paused()):
             self.voice.stop()
 
-    def upcoming(self, limit: int = 10) -> list[QueueItem]:
-        return list(self.queue._queue)[:limit]
+    def move_queue_item(self, index: int, offset: int) -> int | None:
+        """Move an upcoming track by ``offset`` positions without touching playback."""
+        target = index + offset
+        if index < 0 or target < 0 or index >= self.queue.qsize() or target >= self.queue.qsize():
+            return None
+        items = self.queue._queue
+        items[index], items[target] = items[target], items[index]
+        return target
+
+    def upcoming(self, limit: int | None = 10) -> list[QueueItem]:
+        items = list(self.queue._queue)
+        return items if limit is None else items[:limit]
 
     @property
     def is_paused(self) -> bool:
