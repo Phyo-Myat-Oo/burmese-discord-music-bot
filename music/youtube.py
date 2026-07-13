@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import os
 from urllib.parse import urlparse
 
 import yt_dlp
@@ -59,8 +60,11 @@ class YouTubeClient:
     @classmethod
     def _search(cls, query: str, limit: int) -> list[YouTubeResult]:
         target = query if is_youtube_url(query) else f"ytsearch{limit}:{query}"
+        opts = cls.SEARCH_OPTIONS.copy()
+        if os.path.exists("cookies.txt"):
+            opts["cookiefile"] = "cookies.txt"
         try:
-            with yt_dlp.YoutubeDL(cls.SEARCH_OPTIONS) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(target, download=False)
         except Exception as exc:
             raise YouTubeError(str(exc)) from exc
@@ -84,19 +88,25 @@ class YouTubeClient:
         return results
 
     @classmethod
-    async def stream_url(cls, video_url: str) -> str:
+    async def stream_url(cls, video_url: str) -> dict[str, str | dict]:
         return await asyncio.to_thread(cls._stream_url, video_url)
 
     @classmethod
-    def _stream_url(cls, video_url: str) -> str:
+    def _stream_url(cls, video_url: str) -> dict[str, str | dict]:
         if not is_youtube_url(video_url):
             raise YouTubeError("Only YouTube URLs are accepted")
+        opts = cls.STREAM_OPTIONS.copy()
+        if os.path.exists("cookies.txt"):
+            opts["cookiefile"] = "cookies.txt"
         try:
-            with yt_dlp.YoutubeDL(cls.STREAM_OPTIONS) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(video_url, download=False)
         except Exception as exc:
             raise YouTubeError(str(exc)) from exc
         stream = info.get("url") if info else None
         if not stream:
             raise YouTubeError("YouTube returned no playable audio stream")
-        return stream
+        return {
+            "url": stream,
+            "headers": info.get("http_headers", {})
+        }

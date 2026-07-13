@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import time
@@ -18,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class QueueItem:
-    source: Path | Callable[[], Awaitable[str]]
+    source: Path | Callable[[], Awaitable[str | dict]]
     title: str
     album: str = ""
     requester: str = "Unknown"
@@ -120,7 +121,14 @@ class GuildPlayer:
             try:
                 finished = asyncio.Event()
                 loop = asyncio.get_running_loop()
-                source_value = await item.source() if callable(item.source) else str(item.source)
+                resolved = await item.source() if callable(item.source) else item.source
+                if isinstance(resolved, dict):
+                    source_value = resolved["url"]
+                    headers = resolved.get("headers", {})
+                else:
+                    source_value = str(resolved)
+                    headers = {}
+
                 if item.duration is None:
                     item.duration = await asyncio.to_thread(probe_duration, source_value, self.ffmpeg)
                     if item.duration and self.on_duration:
@@ -128,10 +136,16 @@ class GuildPlayer:
                             await self.on_duration(item)
                         except Exception:
                             LOGGER.exception("Could not cache duration for %s", item.title)
+
+                before_opts = "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_at_eof 1 -reconnect_delay_max 5"
+                if headers:
+                    header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+                    before_opts = f'-headers {shlex.quote(header_str)} ' + before_opts
+
                 source = discord.FFmpegOpusAudio(
                     source_value,
                     executable=self.ffmpeg,
-                    before_options="-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+                    before_options=before_opts,
                     options="-vn",
                 )
 

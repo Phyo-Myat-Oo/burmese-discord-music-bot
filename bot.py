@@ -156,7 +156,7 @@ async def queue_youtube_track(interaction: discord.Interaction, result: YouTubeR
     player = bot.player(interaction.guild)
     await player.connect(member.voice.channel)
 
-    async def resolve() -> str:
+    async def resolve() -> dict[str, str | dict]:
         return await YouTubeClient.stream_url(result.url)
 
     position = await player.enqueue_stream(
