@@ -173,7 +173,7 @@ class GuildPlayer:
 
                 before_opts = (
                     "-nostdin -hide_banner -loglevel error -reconnect 1 "
-                    "-reconnect_streamed 1 -reconnect_at_eof 1 -reconnect_delay_max 5"
+                    "-reconnect_streamed 1 -reconnect_delay_max 5"
                 )
                 if headers:
                     header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
