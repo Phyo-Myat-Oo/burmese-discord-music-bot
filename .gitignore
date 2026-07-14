@@ -2,7 +2,6 @@
 .venv/
 __pycache__/
 *.pyc
-data/
 cache/
 data.7z
 /data.zip
