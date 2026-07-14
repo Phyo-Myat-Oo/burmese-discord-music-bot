@@ -128,7 +128,9 @@ def requester_voice_channel(
     """Find the command caller's channel from the authoritative guild state."""
     if not interaction.guild:
         return None
-    state = interaction.guild.voice_states.get(interaction.user.id)
+    # discord.py stores this cache privately; the public ``Guild.voice_states``
+    # attribute is not available in the installed 2.x release.
+    state = interaction.guild._voice_states.get(interaction.user.id)
     if state and isinstance(state.channel, (discord.VoiceChannel, discord.StageChannel)):
         return state.channel
     member = interaction.guild.get_member(interaction.user.id)
