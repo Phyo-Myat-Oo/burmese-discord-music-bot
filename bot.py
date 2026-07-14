@@ -1386,7 +1386,10 @@ async def nowplaying(interaction: discord.Interaction) -> None:
 
 @bot.tree.command(description="Join a selected voice channel")
 @app_commands.describe(channel="The voice channel Daisy should join")
-async def join(interaction: discord.Interaction, channel: discord.VoiceChannel) -> None:
+async def join(
+    interaction: discord.Interaction,
+    channel: discord.VoiceChannel | discord.StageChannel,
+) -> None:
     if not interaction.guild:
         await interaction.response.send_message("Music playback is only available in a server.", ephemeral=True)
         return
