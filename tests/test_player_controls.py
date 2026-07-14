@@ -3,7 +3,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from music.player import BufferedOpusAudio, GuildPlayer, QueueItem, prebuffer_frame_count
+from music.player import (
+    BufferedOpusAudio,
+    GuildPlayer,
+    QueueItem,
+    audio_output_mode,
+    prebuffer_frame_count,
+)
 
 
 class FakeVoice:
@@ -108,6 +114,14 @@ class PlayerControlTests(unittest.TestCase):
             self.assertEqual(prebuffer_frame_count(), 250)
         with patch.dict(os.environ, {"AUDIO_PREBUFFER_SECONDS": "invalid"}):
             self.assertEqual(prebuffer_frame_count(), 100)
+
+    def test_pcm_is_default_and_invalid_output_mode_falls_back_to_pcm(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(audio_output_mode(), "pcm")
+        with patch.dict(os.environ, {"AUDIO_OUTPUT_MODE": "opus"}):
+            self.assertEqual(audio_output_mode(), "opus")
+        with patch.dict(os.environ, {"AUDIO_OUTPUT_MODE": "not-a-format"}):
+            self.assertEqual(audio_output_mode(), "pcm")
 
 
 if __name__ == "__main__":

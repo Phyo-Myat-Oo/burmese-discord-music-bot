@@ -31,6 +31,7 @@ SYNC_INTERVAL_HOURS = float(os.getenv("SYNC_INTERVAL_HOURS", "6"))
 class MusicBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
+        intents.voice_states = True
         super().__init__(command_prefix="!", intents=intents)
         self.library = Library(Path("data/music.db"), Path("data/music"))
         self.scraper = SiteScraper(self.library)
@@ -121,25 +122,40 @@ def is_admin(interaction: discord.Interaction) -> bool:
     )
 
 
+def requester_voice_channel(
+    interaction: discord.Interaction,
+) -> discord.VoiceChannel | discord.StageChannel | None:
+    """Find the command caller's channel from the authoritative guild state."""
+    if not interaction.guild:
+        return None
+    state = interaction.guild.voice_states.get(interaction.user.id)
+    if state and isinstance(state.channel, (discord.VoiceChannel, discord.StageChannel)):
+        return state.channel
+    member = interaction.guild.get_member(interaction.user.id)
+    if member and member.voice and isinstance(member.voice.channel, (discord.VoiceChannel, discord.StageChannel)):
+        return member.voice.channel
+    return None
+
+
 async def queue_pcloud_track(interaction: discord.Interaction, track) -> str:
-    member = interaction.user
-    if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:
-        raise ValueError("Join a voice channel first.")
     if not interaction.guild:
         raise ValueError("Music playback is only available in a server.")
+    channel = requester_voice_channel(interaction)
+    if channel is None:
+        raise ValueError("Discord cannot see you in a voice channel yet. Leave and rejoin it, then try again.")
 
     player = bot.player(interaction.guild)
-    await player.connect(member.voice.channel)
+    await player.connect(channel)
 
     async def resolve() -> str:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             return await PCloudClient(session).stream_url(track["code"], track["file_id"])
 
     position = await player.enqueue_stream(
-        resolve, track["title"], track["album_title"], member.display_name, track["id"],
+        resolve, track["title"], track["album_title"], interaction.user.display_name, track["id"],
         source_url=track["post_url"], duration=track["duration"],
         artist=track["artist"] or "Unknown", cover_url=track["cover_url"],
-        requester_id=member.id,
+        requester_id=interaction.user.id,
     )
     return (
         f"Queued **{track['title']}**\nAlbum: {track['album_title']}\n"
@@ -158,22 +174,22 @@ async def queue_pcloud_album(interaction: discord.Interaction, album) -> int:
 
 
 async def queue_youtube_track(interaction: discord.Interaction, result: YouTubeResult) -> str:
-    member = interaction.user
-    if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:
-        raise ValueError("Join a voice channel first.")
     if not interaction.guild:
         raise ValueError("Music playback is only available in a server.")
+    channel = requester_voice_channel(interaction)
+    if channel is None:
+        raise ValueError("Discord cannot see you in a voice channel yet. Leave and rejoin it, then try again.")
     player = bot.player(interaction.guild)
-    await player.connect(member.voice.channel)
+    await player.connect(channel)
 
     async def resolve() -> dict[str, str | dict]:
         return await YouTubeClient.stream_url(result.url)
 
     position = await player.enqueue_stream(
-        resolve, result.title, f"YouTube • {result.uploader}", member.display_name,
+        resolve, result.title, f"YouTube • {result.uploader}", interaction.user.display_name,
         source_type="youtube", source_url=result.url, uploader=result.uploader,
         duration=result.duration, thumbnail=result.thumbnail,
-        artist=result.uploader, cover_url=result.thumbnail, requester_id=member.id,
+        artist=result.uploader, cover_url=result.thumbnail, requester_id=interaction.user.id,
     )
     return (
         f"Queued **{result.title}**\nChannel: {result.uploader}\n"

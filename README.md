@@ -82,9 +82,11 @@ The now-playing panel shows artist, album, cover art, source link, requester,
 duration, and an elapsed progress bar. Missing pCloud durations are probed once
 with FFprobe on first playback and cached in SQLite.
 
-The player keeps a two-second in-memory Opus buffer before Discord playback to
-absorb short source-network stalls. Adjust `AUDIO_PREBUFFER_SECONDS` in `.env`
-(or set it to `0` to disable buffering).
+The player keeps a two-second in-memory audio buffer before Discord playback to
+absorb short source-network stalls. It sends 48 kHz stereo PCM to Discord by
+default so discord.py creates consistently timed voice packets. Adjust
+`AUDIO_PREBUFFER_SECONDS` in `.env` (or set it to `0` to disable buffering),
+or set `AUDIO_OUTPUT_MODE=opus` to restore FFmpeg Opus passthrough.
 
 When browsing an artist's album, select it and use **Play Album** to queue its
 entire track list. `/album play` also offers matching album-title suggestions.

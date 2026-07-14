@@ -76,8 +76,26 @@ def prebuffer_frame_count() -> int:
     return max(0, min(250, round(seconds * 50)))
 
 
+def audio_output_mode() -> str:
+    """Return the Discord audio input format selected by configuration.
+
+    PCM lets discord.py encode consistently sized 20 ms frames itself.  It uses
+    a little more CPU than passing FFmpeg's Opus packets through, but is often
+    more tolerant of irregular packet boundaries from remote HTTP streams.
+    """
+    mode = os.getenv("AUDIO_OUTPUT_MODE", "pcm").strip().casefold()
+    if mode not in {"pcm", "opus"}:
+        LOGGER.warning("Unknown AUDIO_OUTPUT_MODE=%r; using pcm", mode)
+        return "pcm"
+    return mode
+
+
 class BufferedOpusAudio(discord.AudioSource):
-    """Keep a short in-memory buffer between FFmpeg and Discord's voice thread."""
+    """Keep a short in-memory buffer between FFmpeg and Discord's voice thread.
+
+    Despite the historical name, the wrapper works for both Opus and raw PCM
+    sources; ``is_opus`` is delegated to the wrapped FFmpeg source.
+    """
 
     def __init__(self, source: discord.AudioSource, frame_count: int) -> None:
         self.source = source
@@ -264,11 +282,16 @@ class GuildPlayer:
                         except Exception:
                             LOGGER.exception("Could not cache duration for %s", item.title)
 
-                source = discord.FFmpegOpusAudio(
+                output_mode = audio_output_mode()
+                audio_source_class = (
+                    discord.FFmpegPCMAudio if output_mode == "pcm"
+                    else discord.FFmpegOpusAudio
+                )
+                source = audio_source_class(
                     source_value,
                     executable=self.ffmpeg,
                     before_options=before_opts,
-                    options="-vn",
+                    options="-vn -af aresample=async=1:first_pts=0",
                 )
                 buffer_frames = prebuffer_frame_count()
                 if buffer_frames:
