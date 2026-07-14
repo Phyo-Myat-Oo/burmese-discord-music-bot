@@ -139,12 +139,26 @@ def requester_voice_channel(
     return None
 
 
+def playback_channel(interaction: discord.Interaction) -> discord.VoiceChannel | discord.StageChannel | None:
+    """Use the requester channel, or a channel explicitly joined by Daisy."""
+    channel = requester_voice_channel(interaction)
+    if channel is not None:
+        return channel
+    if interaction.guild:
+        player = bot.players.get(interaction.guild.id)
+        if player and player.voice and player.voice.is_connected():
+            existing = player.voice.channel
+            if isinstance(existing, (discord.VoiceChannel, discord.StageChannel)):
+                return existing
+    return None
+
+
 async def queue_pcloud_track(interaction: discord.Interaction, track) -> str:
     if not interaction.guild:
         raise ValueError("Music playback is only available in a server.")
-    channel = requester_voice_channel(interaction)
+    channel = playback_channel(interaction)
     if channel is None:
-        raise ValueError("Discord cannot see you in a voice channel yet. Leave and rejoin it, then try again.")
+        raise ValueError("Discord cannot see your voice channel. Use `/join` to select one first.")
 
     player = bot.player(interaction.guild)
     await player.connect(channel)
@@ -178,9 +192,9 @@ async def queue_pcloud_album(interaction: discord.Interaction, album) -> int:
 async def queue_youtube_track(interaction: discord.Interaction, result: YouTubeResult) -> str:
     if not interaction.guild:
         raise ValueError("Music playback is only available in a server.")
-    channel = requester_voice_channel(interaction)
+    channel = playback_channel(interaction)
     if channel is None:
-        raise ValueError("Discord cannot see you in a voice channel yet. Leave and rejoin it, then try again.")
+        raise ValueError("Discord cannot see your voice channel. Use `/join` to select one first.")
     player = bot.player(interaction.guild)
     await player.connect(channel)
 
@@ -1368,6 +1382,24 @@ async def nowplaying(interaction: discord.Interaction) -> None:
         return
     player = bot.player(interaction.guild)
     await interaction.response.send_message(embed=now_playing_embed(player), view=PlayerControlsView())
+
+
+@bot.tree.command(description="Join a selected voice channel")
+@app_commands.describe(channel="The voice channel Daisy should join")
+async def join(interaction: discord.Interaction, channel: discord.VoiceChannel) -> None:
+    if not interaction.guild:
+        await interaction.response.send_message("Music playback is only available in a server.", ephemeral=True)
+        return
+    try:
+        await bot.player(interaction.guild).connect(channel)
+    except (discord.Forbidden, discord.HTTPException, discord.ClientException, asyncio.TimeoutError) as exc:
+        LOGGER.warning("Could not join voice channel %s: %s", channel.id, exc)
+        await interaction.response.send_message(
+            "I could not join that channel. Give Daisy View Channel, Connect, and Speak permissions.",
+            ephemeral=True,
+        )
+        return
+    await interaction.response.send_message(f"Joined **{channel.name}**. You can now use `/play`.")
 
 
 @bot.tree.command(description="Show bot health and catalogue information")
