@@ -1,33 +1,54 @@
-# Daisy V2 Discord Music Bot
+# Daisy MusicBot
 
-Daisy V2 is the current Python Discord music bot for the Burmese music
-catalogue. The old V1 bot files have been removed; active code lives in
-`daisy_v2/`.
+Daisy is being rebuilt as a Node.js Discord music bot on top of
+[`umutxyp/MusicBot`](https://github.com/umutxyp/MusicBot) / Beatra.
 
-## Quick Start
+The imported playback baseline is pinned to upstream commit
+`e3c825e5ec19c8756bf6612bb7f1f7569501e526` (Beatra v16.0.0).
+
+Use these two files as the starting brief:
+
+- `PROJECT_SUMMARY.md`
+- `FUNCTIONALITY_SPEC.md`
+
+Keep and reuse the existing catalogue database:
+
+- `data/daisy_v2/catalog.db`
+
+Do not scrape Phyu Ni War Pyar again from scratch unless the catalogue database
+is missing, corrupt, or intentionally reset.
+
+## Local setup
+
+Requirements:
+
+- Node.js 24.11.1 or newer
+- A Discord bot token and application client ID
+- A development guild ID for fast slash-command registration
+- FFmpeg on `PATH` if the optional bundled binary cannot be installed
 
 ```powershell
-py -m venv .venv-v2
-.venv-v2\Scripts\Activate.ps1
-pip install -r requirements-v2.txt
-Copy-Item .env.v2.example .env
-python -m daisy_v2
+npm install
+Copy-Item .env.example .env
+npm start
 ```
 
-Put your Discord bot token and server settings in `.env` before starting.
+The catalogue database is intentionally excluded from Git. Place the retained
+database at `data/daisy_v2/catalog.db` or set `CATALOG_DB_PATH` to its location.
 
-## Catalogue
+## Daisy catalogue commands
 
-Index the full Blogspot catalogue:
+- `/phyu play` shows typed track and album suggestions while you type.
+- `/phyu search` shows paginated track and album results.
+- Selecting a track queues one song; selecting an album queues the full album.
+- `/favorites add` searches Phyu tracks with autocomplete and saves the selected song.
+- `/favorites remove` autocompletes only from your saved favorites and removes the selection.
+- `/favorites list` opens your private paginated favorites picker.
+- `/favorites play` autocompletes only from your saved favorites and plays the selection.
+- `/nowplaying` opens the same interactive playback card used when a song starts.
+- The Queue button opens an in-card paginated queue manager. Select a song and then its new position to reorder it; Clear Queue removes upcoming songs without stopping the current track, and Back returns to playback controls.
+- The now-playing card has one Favorite button that toggles the current track on or off for the user who clicks it.
 
-```powershell
-python -m daisy_v2.indexer --all
-```
-
-Resume the same command if it is interrupted. The indexer saves progress as it
-goes and stores the V2 catalogue in `data/daisy_v2/`.
-
-## More Details
-
-See [`daisy_v2/README.md`](daisy_v2/README.md) for V2 commands, deployment
-notes, and catalogue migration details.
+Favorites are stored separately from the read-only catalogue in
+`data/daisy_state.db` by default. Set `STATE_DB_PATH` to move this writable
+database. Temporary pCloud and audio-stream URLs are never stored.
