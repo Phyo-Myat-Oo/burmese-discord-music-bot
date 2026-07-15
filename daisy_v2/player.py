@@ -191,8 +191,8 @@ class GuildPlayer:
         history_id: int | None = None
         completed = False
         try:
-            # V2 deliberately waits for a verified local file before starting.
-            buffer_wait = asyncio.create_task(self.cache.ensure(track), name=f"buffer:{track.source_key}")
+            # V2 deliberately waits for a verified, normalized local file before starting.
+            buffer_wait = asyncio.create_task(self.cache.prepare_playback(track), name=f"buffer:{track.source_key}")
             self._buffer_wait = buffer_wait
             try:
                 path = await buffer_wait
@@ -216,7 +216,7 @@ class GuildPlayer:
             source = discord.FFmpegPCMAudio(
                 str(path), executable=self.ffmpeg,
                 before_options="-nostdin -hide_banner -loglevel error",
-                options="-vn -af aresample=async=1:first_pts=0",
+                options="-vn",
             )
 
             def after(error: Exception | None) -> None:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest.mock import patch
 
 from daisy_v2.cache import DiskCache
 from daisy_v2.models import QueueTrack, SourceType
@@ -53,6 +55,25 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
         third = await self.cache.ensure(self.track)
         self.assertEqual(third, first)
         self.assertEqual(self.sources.calls, 1)
+
+    async def test_prepare_playback_reuses_normalized_wav(self) -> None:
+        conversions = 0
+
+        def fake_run(args, **_kwargs):
+            nonlocal conversions
+            if "-y" in args:
+                conversions += 1
+                Path(args[-1]).write_bytes(b"RIFFfakeWAVE")
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with patch("daisy_v2.cache.subprocess.run", side_effect=fake_run):
+            first = await self.cache.prepare_playback(self.track)
+            second = await self.cache.prepare_playback(self.track)
+
+        self.assertEqual(first, second)
+        self.assertEqual(first.suffix, ".wav")
+        self.assertTrue(first.name.endswith(".play.wav"))
+        self.assertEqual(conversions, 1)
 
 
 if __name__ == "__main__":

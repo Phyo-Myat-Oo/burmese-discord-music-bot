@@ -24,6 +24,9 @@ class SlowCache:
         await asyncio.Event().wait()
         raise AssertionError("unreachable")
 
+    async def prepare_playback(self, track):
+        return await self.ensure(track)
+
     async def prefetch(self, _tracks) -> None:
         pass
 

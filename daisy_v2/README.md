@@ -12,6 +12,8 @@ cache-first application.
 - Every pCloud/YouTube track is downloaded to a bounded temporary disk cache,
   validated, and only then handed to FFmpeg/Discord. The first track can show a
   short buffering wait, but it is not played from an unreliable live pCloud URL.
+- Cached tracks are normalized into 48 kHz stereo WAV playback files before
+  Discord voice starts, which smooths out many damaged or oddly timed MP3s.
 - Each Discord server has one lock-protected player actor instead of mutating
   private `asyncio.Queue` internals.
 - `/join` is available as an explicit fallback when Discord does not expose the

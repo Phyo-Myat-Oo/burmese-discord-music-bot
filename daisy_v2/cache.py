@@ -39,6 +39,7 @@ class DiskCache:
         self.ttl_seconds = ttl_seconds
         self.ffmpeg_path = ffmpeg_path
         self._inflight: dict[str, asyncio.Task[Path]] = {}
+        self._prepared_inflight: dict[str, asyncio.Task[Path]] = {}
         self._pinned: set[str] = set()
         self._lock = asyncio.Lock()
 
@@ -50,17 +51,22 @@ class DiskCache:
     def _cleanup_orphans(self) -> None:
         cutoff = time.time() - self.ttl_seconds
         for path in self.directory.glob("*"):
-            if path.suffix == ".part" or path.stat().st_mtime < cutoff:
+            if path.suffix == ".part" or (path.name.endswith(".play.wav") and path.stat().st_mtime < cutoff):
                 path.unlink(missing_ok=True)
 
     def _path(self, track: QueueTrack) -> Path:
         return self.directory / self.sources.stable_file_name(track.source_key)
 
-    async def ensure(self, track: QueueTrack) -> Path:
+    def _playback_path(self, track: QueueTrack) -> Path:
+        stem = self.sources.stable_file_name(track.source_key).removesuffix(".media")
+        return self.directory / f"{stem}.play.wav"
+
+    async def ensure(self, track: QueueTrack, *, touch: bool = True) -> Path:
         """Return a validated local copy, downloading once even under concurrent requests."""
         target = self._path(track)
         if await asyncio.to_thread(self._valid, target):
-            os.utime(target, None)
+            if touch:
+                os.utime(target, None)
             return target
         async with self._lock:
             existing = self._inflight.get(track.source_key)
@@ -80,6 +86,35 @@ class DiskCache:
     def _discard_completed(self, key: str, task: asyncio.Task[Path]) -> None:
         if self._inflight.get(key) is task:
             self._inflight.pop(key, None)
+
+    async def prepare_playback(self, track: QueueTrack) -> Path:
+        """Return a normalized 48 kHz stereo WAV for smoother Discord playback."""
+        source = await self.ensure(track, touch=False)
+        target = self._playback_path(track)
+        if await asyncio.to_thread(self._playback_valid, source, target):
+            os.utime(target, None)
+            return target
+        async with self._lock:
+            existing = self._prepared_inflight.get(track.source_key)
+            if existing is None:
+                existing = asyncio.create_task(
+                    self._prepare_playback(track, source, target),
+                    name=f"prepare:{track.source_key}",
+                )
+                self._prepared_inflight[track.source_key] = existing
+                existing.add_done_callback(
+                    lambda done, key=track.source_key: self._discard_prepared_completed(key, done)
+                )
+        try:
+            return await asyncio.shield(existing)
+        finally:
+            if existing.done():
+                async with self._lock:
+                    self._prepared_inflight.pop(track.source_key, None)
+
+    def _discard_prepared_completed(self, key: str, task: asyncio.Task[Path]) -> None:
+        if self._prepared_inflight.get(key) is task:
+            self._prepared_inflight.pop(key, None)
 
     async def prefetch(self, tracks: list[QueueTrack]) -> None:
         """Start bounded background downloads; callers never wait for these tasks."""
@@ -113,6 +148,67 @@ class DiskCache:
         except BaseException:
             partial.unlink(missing_ok=True)
             raise
+
+    async def _prepare_playback(self, track: QueueTrack, source: Path, target: Path) -> Path:
+        partial = target.with_suffix(".wav.part")
+        partial.unlink(missing_ok=True)
+        LOGGER.info("Preparing normalized playback audio: %s", track.title)
+        try:
+            await asyncio.to_thread(self._convert_to_playback_wav, source, partial)
+            if not await asyncio.to_thread(self._valid, partial):
+                raise CacheError("Prepared playback audio did not pass validation")
+            os.replace(partial, target)
+            await self.evict(exclude={track.source_key})
+            LOGGER.info("Playback audio prepared: %s", track.title)
+            return target
+        except BaseException:
+            partial.unlink(missing_ok=True)
+            raise
+
+    def _convert_to_playback_wav(self, source: Path, destination: Path) -> None:
+        ffmpeg = self.ffmpeg_path or shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise CacheError("FFmpeg was not found. Install it or set FFMPEG_PATH.")
+        result = subprocess.run(
+            [
+                ffmpeg,
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(source),
+                "-vn",
+                "-map_metadata",
+                "-1",
+                "-ac",
+                "2",
+                "-ar",
+                "48000",
+                "-sample_fmt",
+                "s16",
+                "-af",
+                "aresample=async=1:first_pts=0",
+                str(destination),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        if result.returncode != 0:
+            message = (result.stderr or result.stdout or "unknown FFmpeg error").strip()
+            raise CacheError(f"Could not prepare playback audio: {message}")
+
+    def _playback_valid(self, source: Path, target: Path) -> bool:
+        try:
+            if not target.is_file() or target.stat().st_size == 0:
+                return False
+            if target.stat().st_mtime < source.stat().st_mtime:
+                return False
+            return self._valid(target)
+        except OSError:
+            return False
 
     def _valid(self, path: Path) -> bool:
         try:
@@ -153,13 +249,13 @@ class DiskCache:
         candidates: list[tuple[float, Path, str]] = []
         total = 0
         cutoff = time.time() - self.ttl_seconds
-        for path in self.directory.glob("*.media"):
+        for path in list(self.directory.glob("*.media")) + list(self.directory.glob("*.play.wav")):
             try:
                 stat = path.stat()
             except OSError:
                 continue
             total += stat.st_size
-            key = path.stem
+            key = path.name.removesuffix(".media").removesuffix(".play.wav")
             if stat.st_mtime < cutoff and key not in protected:
                 path.unlink(missing_ok=True)
                 total -= stat.st_size
