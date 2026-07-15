@@ -1,10 +1,13 @@
 .env
 .venv/
+.venv-v2/
 __pycache__/
 *.pyc
-cache/
+
+data/daisy_v2/
 data.7z
 /data.zip
+
 cookies.txt
 project.zip
 .DS_Store
