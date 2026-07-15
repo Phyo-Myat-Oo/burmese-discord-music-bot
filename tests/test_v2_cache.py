@@ -63,6 +63,8 @@ class CacheTests(unittest.IsolatedAsyncioTestCase):
             nonlocal conversions
             if "-y" in args:
                 conversions += 1
+                self.assertIn("-f", args)
+                self.assertEqual(args[args.index("-f") + 1], "wav")
                 Path(args[-1]).write_bytes(b"RIFFfakeWAVE")
             return subprocess.CompletedProcess(args, 0, "", "")
 

@@ -190,6 +190,8 @@ class DiskCache:
                 "s16",
                 "-af",
                 "aresample=async=1:first_pts=0",
+                "-f",
+                "wav",
                 str(destination),
             ],
             capture_output=True,
