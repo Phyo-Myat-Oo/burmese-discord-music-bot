@@ -8,11 +8,6 @@ build/
 logs/
 *.log
 
-data/daisy_v2/
-/data/daisy_state.db*
-data.7z
-/data.zip
-project.zip
 
 __pycache__/
 *.pyc
