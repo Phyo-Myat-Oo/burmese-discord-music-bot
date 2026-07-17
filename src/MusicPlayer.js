@@ -34,6 +34,7 @@ const phyuPlaybackProvider = new PhyuPlaybackProvider();
 // Cache directory for downloaded audio files
 const CACHE_DIR = path.join(__dirname, '..', 'audio_cache');
 const PRELOAD_AHEAD_COUNT = 5;
+const PHYU_PRELOAD_AHEAD_COUNT = 1;
 const MAX_CACHED_TRACKS = 10;
 
 // Ensure cache directory exists
@@ -596,7 +597,7 @@ class MusicPlayer {
 
         const protectedFiles = new Set(this.downloadingFiles);
         if (this.currentDownloadedFile) protectedFiles.add(this.currentDownloadedFile);
-        for (const track of this.queue.slice(0, PRELOAD_AHEAD_COUNT)) {
+        for (const track of this.getPreloadWindowTracks()) {
             if (track?.url) protectedFiles.add(this.getTrackCachePath(track));
         }
 
@@ -1851,6 +1852,15 @@ class MusicPlayer {
     }
 
     // Preloading System
+    getPreloadWindowTracks() {
+        let phyuTracks = 0;
+        return this.queue.slice(0, PRELOAD_AHEAD_COUNT).filter(track => {
+            if (track?.platform !== 'phyu') return true;
+            phyuTracks += 1;
+            return phyuTracks <= PHYU_PRELOAD_AHEAD_COUNT;
+        });
+    }
+
     schedulePreloadWindow() {
         if (this.preloadWindowPromise) {
             this.preloadWindowPending = true;
@@ -1860,7 +1870,7 @@ class MusicPlayer {
         this.preloadWindowPromise = (async () => {
             do {
                 this.preloadWindowPending = false;
-                const upcoming = this.queue.slice(0, PRELOAD_AHEAD_COUNT);
+                const upcoming = this.getPreloadWindowTracks();
                 for (const track of upcoming) {
                     await this.preloadTrack(track);
                 }

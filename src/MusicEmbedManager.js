@@ -56,27 +56,6 @@ class MusicEmbedManager {
     }
 
     /**
-     * Queue'daki track'leri sırayla preload eder (donmayı önler)
-     */
-    async sequentialPreload(player, tracks) {
-        for (const track of tracks) {
-            // Eğer bu track zaten preload edilmişse veya preload sırasındaysa atla
-            if (player.preloadedStreams.has(track.url) || player.preloadingQueue.includes(track.url)) {
-                continue;
-            }
-
-            try {
-                await player.preloadTrack(track);
-                // Her preload arasında kısa bekleme (sistem yükünü azaltmak için)
-                await new Promise(resolve => setTimeout(resolve, 100));
-            } catch (err) {
-                console.error(`❌ Preload error for ${track.title}:`, err.message);
-                // Hata olsa bile devam et
-            }
-        }
-    }
-
-    /**
      * Müzik verilerini işler ve uygun embed'i gönderir/günceller
      */
     async handleMusicData(guildId, trackData, member, interaction = null, privateInteraction = interaction) {
@@ -183,12 +162,9 @@ class MusicEmbedManager {
                 }
             }
 
-            // Preload'ı tetikle - queue'daki track'leri sırayla preload et (donmayı önlemek için)
-            // Preload only the next few tracks. Large catalogue albums can contain
-            // dozens of tracks and should not download the whole album at once.
-            this.sequentialPreload(player, player.queue.slice(0, 3)).catch(err =>
-                console.error('❌ Sequential preload error:', err.message)
-            );
+            // MusicPlayer owns the single sequential preload worker. It applies
+            // source-specific limits so Phyu albums do not waste pCloud traffic.
+            player.schedulePreloadWindow();
 
             // Eğer ilk şarkıyı çalmaya başladıysak ve playlist'te başka şarkılar varsa
             if (firstTrackResult && tracks.length > 1) {

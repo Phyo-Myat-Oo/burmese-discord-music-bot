@@ -30,6 +30,42 @@ test('preloads only the next five queued tracks in sequence', async () => {
     ]);
 });
 
+test('preloads at most one Phyu track from the upcoming window', async () => {
+    const player = Object.create(MusicPlayer.prototype);
+    player.queue = Array.from({ length: 5 }, (_, index) => ({
+        url: `phyu:track:${index + 1}`,
+        title: `Phyu Track ${index + 1}`,
+        platform: 'phyu',
+    }));
+    player.preloadWindowPromise = null;
+    player.preloadWindowPending = false;
+
+    const preloaded = [];
+    player.preloadTrack = async track => {
+        preloaded.push(track.url);
+    };
+
+    await player.schedulePreloadWindow();
+
+    assert.deepEqual(preloaded, ['phyu:track:1']);
+});
+
+test('keeps non-Phyu preloading while limiting Phyu traffic', () => {
+    const player = Object.create(MusicPlayer.prototype);
+    player.queue = [
+        { url: 'phyu:track:1', platform: 'phyu' },
+        { url: 'youtube:1', platform: 'youtube' },
+        { url: 'phyu:track:2', platform: 'phyu' },
+        { url: 'youtube:2', platform: 'youtube' },
+        { url: 'youtube:3', platform: 'youtube' },
+    ];
+
+    assert.deepEqual(
+        player.getPreloadWindowTracks().map(track => track.url),
+        ['phyu:track:1', 'youtube:1', 'youtube:2', 'youtube:3']
+    );
+});
+
 test('rolling cache removes the oldest files after ten tracks', async t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'daisy-cache-test-'));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
