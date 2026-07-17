@@ -70,7 +70,8 @@ async function queueMusicTracks(interaction, client, musicTracks, options = {}) 
             tracks: musicTracks,
         },
         member,
-        responseInteraction
+        responseInteraction,
+        interaction
     );
 }
 

@@ -1,6 +1,17 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const config = require('../config');
 const LanguageManager = require('./LanguageManager');
+
+const SPECIAL_GREETING_USER_IDS = new Set([
+    '1003981930305441853',
+    '864008629401157684', // Temporary test account
+]);
+const SPECIAL_GREETING = [
+    'Hello , ငါရဲ့ ဒေစီလေး ရေ ဒီနေ့ ရောက်လာပေးလို့ ကျေးဇူးအများကြီး တင်ပါတယ် ။',
+    'အချိန်အကြာကြီးငါ့အနားရှိနေပေးပါဦး ။',
+    '',
+    'ဖြိုး။'
+].join('\n');
 
 class MusicEmbedManager {
     constructor(client) {
@@ -64,7 +75,7 @@ class MusicEmbedManager {
     /**
      * Müzik verilerini işler ve uygun embed'i gönderir/günceller
      */
-    async handleMusicData(guildId, trackData, member, interaction = null) {
+    async handleMusicData(guildId, trackData, member, interaction = null, privateInteraction = interaction) {
         // Çakışma önleme - aynı guild için aynı anda sadece bir işlem
         if (this.processingQueue.has(guildId)) {
             await this.processingQueue.get(guildId);
@@ -75,9 +86,28 @@ class MusicEmbedManager {
 
         try {
             const result = await processingPromise;
+            if (result?.success) {
+                await this.sendSpecialGreeting(privateInteraction, member);
+            }
             return result;
         } finally {
             this.processingQueue.delete(guildId);
+        }
+    }
+
+    async sendSpecialGreeting(interaction, member) {
+        if (!SPECIAL_GREETING_USER_IDS.has(String(member?.id || ''))) return false;
+        if (!interaction?.followUp) return false;
+
+        try {
+            await interaction.followUp({
+                content: SPECIAL_GREETING,
+                flags: MessageFlags.Ephemeral,
+            });
+            return true;
+        } catch (error) {
+            console.error('Could not send the special greeting:', error.message);
+            return false;
         }
     }
 
