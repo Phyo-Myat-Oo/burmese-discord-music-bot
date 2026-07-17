@@ -9,6 +9,21 @@ const track = {
     pcloudFileId: 123456789,
 };
 
+test('accepts exact pCloud IDs larger than JavaScript safe integers', async () => {
+    let requestedUrl;
+    const provider = new PCloudProvider({
+        fetch: async url => {
+            requestedUrl = url;
+            return jsonResponse({ result: 0, hosts: ['cdn.example.com'], path: '/large.mp3' });
+        },
+        apiHosts: ['api.pcloud.com'],
+    });
+
+    await provider.resolve({ ...track, pcloudFileId: '725200524028587006' });
+
+    assert.equal(requestedUrl.searchParams.get('fileid'), '725200524028587006');
+});
+
 function jsonResponse(body, status = 200) {
     return {
         ok: status >= 200 && status < 300,

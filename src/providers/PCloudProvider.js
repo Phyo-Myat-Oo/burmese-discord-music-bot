@@ -77,7 +77,9 @@ class PCloudProvider {
         if (!track.pcloudCode || typeof track.pcloudCode !== 'string') {
             throw new TypeError('Catalogue track is missing pcloudCode.');
         }
-        if (!Number.isSafeInteger(track.pcloudFileId) || track.pcloudFileId < 1) {
+        const numericId = Number.isSafeInteger(track.pcloudFileId) && track.pcloudFileId > 0;
+        const stringId = typeof track.pcloudFileId === 'string' && /^[1-9]\d*$/.test(track.pcloudFileId);
+        if (!numericId && !stringId) {
             throw new TypeError('Catalogue track has an invalid pcloudFileId.');
         }
     }

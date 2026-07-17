@@ -42,10 +42,21 @@ test('loads a stable track with provider and source metadata', t => {
     assert.ok(track.album);
     assert.ok(track.artist);
     assert.ok(track.pcloudCode);
-    assert.ok(Number.isSafeInteger(track.pcloudFileId));
+    assert.match(track.pcloudFileId, /^[1-9]\d*$/);
     assert.match(track.postUrl, /^https:\/\/phyuniwarpyar\.blogspot\.com\//);
     assert.match(track.coverUrl, /^https:\/\//);
     assert.equal('url' in track, false);
+});
+
+test('loads albums containing pCloud IDs larger than JavaScript safe integers', t => {
+    const catalog = new PhyuCatalog(databasePath);
+    t.after(() => catalog.close());
+
+    const tracks = catalog.getAlbumTracks(5460);
+    const largeIdTrack = tracks.find(track => track.pcloudFileId === '725200524028587006');
+
+    assert.ok(largeIdTrack);
+    assert.equal(largeIdTrack.albumId, 5460);
 });
 
 test('searches tracks, artists, and albums with normalized Burmese text', t => {
