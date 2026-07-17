@@ -21,12 +21,6 @@ module.exports = {
             return await this.handleSearchInteraction(interaction, client);
         }
 
-        // Language selection buttons
-        if (interaction.isButton() && interaction.customId.startsWith('language_')) {
-            const languageCommand = require('../commands/language.js');
-            return await languageCommand.handleLanguageButton(interaction);
-        }
-
         // Help refresh button (doesn't require voice channel)
         if (interaction.isButton() && interaction.customId === 'help_refresh') {
             return await this.handleHelpRefresh(interaction);

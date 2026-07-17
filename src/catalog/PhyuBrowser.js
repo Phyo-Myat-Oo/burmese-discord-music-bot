@@ -7,7 +7,7 @@ const {
     StringSelectMenuBuilder,
 } = require('discord.js');
 const config = require('../../config');
-const PhyuCatalog = require('./PhyuCatalog');
+const { getPhyuCatalogClient } = require('./PhyuAutocomplete');
 
 const PAGE_SIZE = 25;
 const SESSION_TTL_MS = 15 * 60 * 1000;
@@ -25,7 +25,7 @@ function pageNumber(value) {
 
 class PhyuBrowser {
     constructor(options = {}) {
-        this.catalogue = options.catalogue || new PhyuCatalog();
+        this.catalogue = options.catalogue || getPhyuCatalogClient();
         this.sessionTtlMs = options.sessionTtlMs || SESSION_TTL_MS;
         this.sessions = new Map();
     }
@@ -70,7 +70,7 @@ class PhyuBrowser {
         }
     }
 
-    renderArtists(sessionId, requestedPage = 0) {
+    async renderArtists(sessionId, requestedPage = 0) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Catalogue browser session not found.');
         const page = pageNumber(requestedPage);
@@ -78,12 +78,15 @@ class PhyuBrowser {
         const finder = session.artistQuery
             ? this.catalogue.searchArtists.bind(this.catalogue)
             : this.catalogue.listArtists.bind(this.catalogue);
-        const artists = session.artistQuery
-            ? finder(session.artistQuery, { limit: PAGE_SIZE, offset })
-            : finder({ limit: PAGE_SIZE, offset });
-        const hasNext = session.artistQuery
-            ? finder(session.artistQuery, { limit: 1, offset: offset + PAGE_SIZE }).length > 0
-            : finder({ limit: 1, offset: offset + PAGE_SIZE }).length > 0;
+        const [artists, nextPage] = await Promise.all([
+            session.artistQuery
+                ? finder(session.artistQuery, { limit: PAGE_SIZE, offset })
+                : finder({ limit: PAGE_SIZE, offset }),
+            session.artistQuery
+                ? finder(session.artistQuery, { limit: 1, offset: offset + PAGE_SIZE })
+                : finder({ limit: 1, offset: offset + PAGE_SIZE }),
+        ]);
+        const hasNext = nextPage.length > 0;
 
         session.artistPage = page;
         const embed = new EmbedBuilder()
@@ -117,21 +120,24 @@ class PhyuBrowser {
         };
     }
 
-    renderTrackSearch(sessionId, requestedPage = 0) {
+    async renderTrackSearch(sessionId, requestedPage = 0) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Catalogue browser session not found.');
         if (!session.trackQuery) throw new Error('A catalogue search query is required.');
 
         const page = pageNumber(requestedPage);
         const offset = page * PAGE_SIZE;
-        const items = this.catalogue.searchItems(
-            session.trackQuery,
-            { limit: PAGE_SIZE, offset }
-        );
-        const hasNext = this.catalogue.searchItems(
-            session.trackQuery,
-            { limit: 1, offset: offset + PAGE_SIZE }
-        ).length > 0;
+        const [items, nextPage] = await Promise.all([
+            this.catalogue.searchItems(
+                session.trackQuery,
+                { limit: PAGE_SIZE, offset }
+            ),
+            this.catalogue.searchItems(
+                session.trackQuery,
+                { limit: 1, offset: offset + PAGE_SIZE }
+            ),
+        ]);
+        const hasNext = nextPage.length > 0;
         const description = items.map((item, index) =>
             item.type === 'album'
                 ? `**${offset + index + 1}. 💿 Album** — ${truncate(item.title, 70)} (${item.trackCount} tracks)`
@@ -173,19 +179,22 @@ class PhyuBrowser {
         };
     }
 
-    renderAlbums(sessionId, artistId, requestedPage = 0) {
+    async renderAlbums(sessionId, artistId, requestedPage = 0) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Catalogue browser session not found.');
-        const artist = this.catalogue.getArtistById(artistId);
+        const artist = await this.catalogue.getArtistById(artistId);
         if (!artist) throw new Error('That artist is no longer available in the catalogue.');
 
         const page = pageNumber(requestedPage);
         const offset = page * PAGE_SIZE;
-        const albums = this.catalogue.getAlbumsByArtist(artist.id, { limit: PAGE_SIZE, offset });
-        const hasNext = this.catalogue.getAlbumsByArtist(
-            artist.id,
-            { limit: 1, offset: offset + PAGE_SIZE }
-        ).length > 0;
+        const [albums, nextPage] = await Promise.all([
+            this.catalogue.getAlbumsByArtist(artist.id, { limit: PAGE_SIZE, offset }),
+            this.catalogue.getAlbumsByArtist(
+                artist.id,
+                { limit: 1, offset: offset + PAGE_SIZE }
+            ),
+        ]);
+        const hasNext = nextPage.length > 0;
 
         session.selectedArtistId = artist.id;
         session.albumPage = page;
@@ -232,15 +241,18 @@ class PhyuBrowser {
         };
     }
 
-    renderAlbum(sessionId, albumId, requestedPage = 0) {
+    async renderAlbum(sessionId, albumId, requestedPage = 0) {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error('Catalogue browser session not found.');
-        const album = this.catalogue.getAlbumById(albumId);
+        const album = await this.catalogue.getAlbumById(albumId);
         if (!album) throw new Error('That album is no longer available in the catalogue.');
 
         const page = pageNumber(requestedPage);
         const offset = page * PAGE_SIZE;
-        const tracks = this.catalogue.getAlbumTracksPage(album.id, { limit: PAGE_SIZE, offset });
+        const tracks = await this.catalogue.getAlbumTracksPage(
+            album.id,
+            { limit: PAGE_SIZE, offset }
+        );
         const pageCount = Math.max(1, Math.ceil(album.trackCount / PAGE_SIZE));
         const description = tracks.map((track, index) =>
             `**${offset + index + 1}.** ${truncate(track.title, 80)}${track.artist ? ` — ${truncate(track.artist, 50)}` : ''}`

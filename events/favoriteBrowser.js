@@ -61,9 +61,9 @@ module.exports = {
 
             const favorite = browser.service.getFavorite(session.ownerId, interaction.values[0]);
             if (!favorite) return replyPrivate(interaction, 'That favorite is no longer available.');
-            const track = browser.service.resolveFavorite(favorite);
 
             await interaction.deferUpdate();
+            const track = await browser.service.resolveFavorite(favorite);
             const result = await queueMusicTracks(
                 interaction,
                 interaction.client,

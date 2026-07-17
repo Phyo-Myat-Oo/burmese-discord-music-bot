@@ -44,15 +44,15 @@ module.exports = {
                     const artistId = Number.parseInt(interaction.values[0], 10);
                     const page = Number.parseInt(args[0], 10);
                     session.artistPage = page;
-                    return interaction.editReply(browser.renderAlbums(session.id, artistId, 0));
+                    return interaction.editReply(await browser.renderAlbums(session.id, artistId, 0));
                 }
 
                 case 'artist-page':
-                    return interaction.editReply(browser.renderArtists(session.id, args[0]));
+                    return interaction.editReply(await browser.renderArtists(session.id, args[0]));
 
                 case 'search-track-page':
                 case 'search-item-page':
-                    return interaction.editReply(browser.renderTrackSearch(session.id, args[0]));
+                    return interaction.editReply(await browser.renderTrackSearch(session.id, args[0]));
 
                 case 'album-select': {
                     const artistId = Number.parseInt(args[0], 10);
@@ -60,33 +60,33 @@ module.exports = {
                     const albumId = Number.parseInt(interaction.values[0], 10);
                     session.selectedArtistId = artistId;
                     session.albumPage = albumPage;
-                    return interaction.editReply(browser.renderAlbum(session.id, albumId, 0));
+                    return interaction.editReply(await browser.renderAlbum(session.id, albumId, 0));
                 }
 
                 case 'album-page': {
                     const page = Number.parseInt(args[0], 10);
                     const artistId = Number.parseInt(args[1], 10);
-                    return interaction.editReply(browser.renderAlbums(session.id, artistId, page));
+                    return interaction.editReply(await browser.renderAlbums(session.id, artistId, page));
                 }
 
                 case 'back-artists':
-                    return interaction.editReply(browser.renderArtists(session.id, session.artistPage));
+                    return interaction.editReply(await browser.renderArtists(session.id, session.artistPage));
 
                 case 'track-page': {
                     const page = Number.parseInt(args[0], 10);
                     const albumId = Number.parseInt(args[1], 10);
-                    return interaction.editReply(browser.renderAlbum(session.id, albumId, page));
+                    return interaction.editReply(await browser.renderAlbum(session.id, albumId, page));
                 }
 
                 case 'back-albums':
                     return interaction.editReply(
-                        browser.renderAlbums(session.id, session.selectedArtistId, session.albumPage)
+                        await browser.renderAlbums(session.id, session.selectedArtistId, session.albumPage)
                     );
 
                 case 'track-select':
                 case 'search-track-select': {
                     const trackId = Number.parseInt(interaction.values[0], 10);
-                    const track = browser.catalogue.getTrackById(trackId);
+                    const track = await browser.catalogue.getTrackById(trackId);
                     if (!track) throw new Error('That track is no longer available in the catalogue.');
                     const result = await queueCatalogueTracks(
                         interaction,
@@ -115,8 +115,8 @@ module.exports = {
 
                     const [, itemType, itemId] = selected;
                     const tracks = itemType === 'album'
-                        ? browser.catalogue.getAlbumTracks(itemId)
-                        : [browser.catalogue.getTrackById(itemId)].filter(Boolean);
+                        ? await browser.catalogue.getAlbumTracks(itemId)
+                        : [await browser.catalogue.getTrackById(itemId)].filter(Boolean);
                     if (!tracks.length) {
                         throw new Error(`That ${itemType} is no longer available in the catalogue.`);
                     }
@@ -147,7 +147,7 @@ module.exports = {
 
                 case 'play-album': {
                     const albumId = Number.parseInt(args[0], 10);
-                    const tracks = browser.catalogue.getAlbumTracks(albumId);
+                    const tracks = await browser.catalogue.getAlbumTracks(albumId);
                     const result = await queueCatalogueTracks(
                         interaction,
                         interaction.client,

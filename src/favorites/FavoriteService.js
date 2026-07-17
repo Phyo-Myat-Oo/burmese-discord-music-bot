@@ -1,5 +1,5 @@
 const DaisyStateStore = require('../state/DaisyStateStore');
-const PhyuCatalog = require('../catalog/PhyuCatalog');
+const { getPhyuCatalogClient } = require('../catalog/PhyuAutocomplete');
 const { toMusicTrack } = require('../catalog/PhyuPlayback');
 
 const SUPPORTED_SOURCES = new Set(['phyu', 'youtube', 'spotify', 'soundcloud', 'direct']);
@@ -7,7 +7,7 @@ const SUPPORTED_SOURCES = new Set(['phyu', 'youtube', 'spotify', 'soundcloud', '
 class FavoriteService {
     constructor(options = {}) {
         this.store = options.store || new DaisyStateStore();
-        this.catalogue = options.catalogue || new PhyuCatalog();
+        this.catalogue = options.catalogue || getPhyuCatalogClient();
     }
 
     identifyTrack(track) {
@@ -80,12 +80,12 @@ class FavoriteService {
         return this.store.getFavoriteById(String(userId), favoriteId);
     }
 
-    resolveFavorite(favorite) {
+    async resolveFavorite(favorite) {
         if (!favorite) throw new Error('Favorite not found.');
         if (favorite.sourceType === 'phyu') {
             const trackId = /^phyu:track:(\d+)$/.exec(favorite.sourceKey)?.[1];
             if (!trackId) throw new Error('The saved Phyu favorite has an invalid stable key.');
-            const catalogueTrack = this.catalogue.getTrackById(trackId);
+            const catalogueTrack = await this.catalogue.getTrackById(trackId);
             if (!catalogueTrack) throw new Error('The saved Phyu track is no longer in the catalogue.');
             return toMusicTrack(catalogueTrack);
         }

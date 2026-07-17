@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const PhyuCatalog = require('../src/catalog/PhyuCatalog');
-const PhyuAutocomplete = require('../src/catalog/PhyuAutocomplete');
+const { getPhyuCatalogClient } = require('../src/catalog/PhyuAutocomplete');
 const { getPhyuBrowser } = require('../src/catalog/PhyuBrowser');
 const {
     toMusicTrack,
@@ -8,13 +7,7 @@ const {
     queueCatalogueTracks,
 } = require('../src/catalog/PhyuPlayback');
 
-let catalogue;
-const autocompleteSearch = new PhyuAutocomplete();
-
-function getCatalogue() {
-    if (!catalogue) catalogue = new PhyuCatalog();
-    return catalogue;
-}
+const catalogue = getPhyuCatalogClient();
 
 function autocompleteLabel(item) {
     const type = item.type === 'album' ? 'Album' : 'Track';
@@ -29,7 +22,7 @@ async function executeSearch(interaction) {
     const query = interaction.options.getString('query', true).trim();
     const browser = getPhyuBrowser();
     const session = browser.createTrackSearchSession(interaction.user.id, query);
-    return interaction.editReply(browser.renderTrackSearch(session.id, 0));
+    return interaction.editReply(await browser.renderTrackSearch(session.id, 0));
 }
 
 async function executePlay(interaction, client) {
@@ -43,8 +36,8 @@ async function executePlay(interaction, client) {
 
     const [, itemType, itemId] = selected;
     const tracks = itemType === 'album'
-        ? getCatalogue().getAlbumTracks(itemId)
-        : [getCatalogue().getTrackById(itemId)].filter(Boolean);
+        ? await catalogue.getAlbumTracks(itemId)
+        : [await catalogue.getTrackById(itemId)].filter(Boolean);
     if (!tracks.length) {
         return interaction.editReply({ content: `That suggested ${itemType} is no longer available.` });
     }
@@ -98,7 +91,7 @@ module.exports = {
         const focused = interaction.options.getFocused().trim();
         if (!focused) return interaction.respond([]);
 
-        const items = await autocompleteSearch.search(focused, { limit: 25 });
+        const items = await catalogue.search(focused, { limit: 25 });
         return interaction.respond(items.map(item => ({
             name: autocompleteLabel(item),
             value: `phyu:${item.type}:${item.id}`,

@@ -27,12 +27,56 @@ class PhyuAutocomplete {
         this.worker.unref();
     }
 
-    search(query, options = {}) {
+    request(method, ...args) {
         const id = this.nextRequestId++;
         return new Promise((resolve, reject) => {
             this.pending.set(id, { resolve, reject });
-            this.worker.postMessage({ id, query, limit: options.limit || 25 });
+            this.worker.postMessage({ id, method, args });
         });
+    }
+
+    search(query, options = {}) {
+        return this.searchItems(query, { limit: options.limit || 25 });
+    }
+
+    searchItems(query, options = {}) {
+        return this.request('searchItems', query, options);
+    }
+
+    searchTracks(query, options = {}) {
+        return this.request('searchTracks', query, options);
+    }
+
+    listArtists(options = {}) {
+        return this.request('listArtists', options);
+    }
+
+    searchArtists(query, options = {}) {
+        return this.request('searchArtists', query, options);
+    }
+
+    getArtistById(id) {
+        return this.request('getArtistById', id);
+    }
+
+    getAlbumsByArtist(id, options = {}) {
+        return this.request('getAlbumsByArtist', id, options);
+    }
+
+    getAlbumById(id) {
+        return this.request('getAlbumById', id);
+    }
+
+    getAlbumTracks(id) {
+        return this.request('getAlbumTracks', id);
+    }
+
+    getAlbumTracksPage(id, options = {}) {
+        return this.request('getAlbumTracksPage', id, options);
+    }
+
+    getTrackById(id) {
+        return this.request('getTrackById', id);
     }
 
     rejectAll(error) {
@@ -41,4 +85,11 @@ class PhyuAutocomplete {
     }
 }
 
+let sharedClient;
+function getPhyuCatalogClient() {
+    if (!sharedClient) sharedClient = new PhyuAutocomplete();
+    return sharedClient;
+}
+
 module.exports = PhyuAutocomplete;
+module.exports.getPhyuCatalogClient = getPhyuCatalogClient;

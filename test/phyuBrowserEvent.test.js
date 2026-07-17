@@ -42,7 +42,7 @@ test('queues every track when the full-album button is used', async () => {
 
     await event.execute(interaction);
 
-    const expectedCount = browser.catalogue.getAlbumById(1).trackCount;
+    const expectedCount = (await browser.catalogue.getAlbumById(1)).trackCount;
     assert.equal(deferred, true);
     assert.equal(queuedData.isPlaylist, true);
     assert.equal(queuedData.tracks.length, expectedCount);
@@ -54,7 +54,7 @@ test('queues every track when the full-album button is used', async () => {
 test('plays a dropdown search result without reusing the browser message', async () => {
     const browser = getPhyuBrowser();
     const session = browser.createTrackSearchSession('user-2', 'နွေ');
-    const searchPayload = browser.renderTrackSearch(session.id, 0);
+    const searchPayload = await browser.renderTrackSearch(session.id, 0);
     const selection = searchPayload.components[0].toJSON().components[0].options
         .find(option => option.value.startsWith('track:')).value;
     let responseInteraction = 'not-called';

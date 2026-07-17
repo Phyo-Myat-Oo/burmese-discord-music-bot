@@ -6,13 +6,13 @@ const { PhyuBrowser, PAGE_SIZE } = require('../src/catalog/PhyuBrowser');
 
 const databasePath = path.resolve(__dirname, '..', 'data', 'daisy_v2', 'catalog.db');
 
-test('renders artist, album, and track selectors from the real catalogue', t => {
+test('renders artist, album, and track selectors from the real catalogue', async t => {
     const catalogue = new PhyuCatalog(databasePath);
     const browser = new PhyuBrowser({ catalogue });
     t.after(() => catalogue.close());
 
     const session = browser.createSession('user-1', 'မေဆွိ');
-    const artists = browser.renderArtists(session.id, 0);
+    const artists = await browser.renderArtists(session.id, 0);
     const artistSelect = artists.components[0].toJSON().components[0];
 
     assert.equal(artistSelect.type, 3);
@@ -20,7 +20,7 @@ test('renders artist, album, and track selectors from the real catalogue', t => 
     assert.ok(artistSelect.options.length <= PAGE_SIZE);
 
     const artistId = Number.parseInt(artistSelect.options[0].value, 10);
-    const albums = browser.renderAlbums(session.id, artistId, 0);
+    const albums = await browser.renderAlbums(session.id, artistId, 0);
     const albumSelect = albums.components[0].toJSON().components[0];
 
     assert.equal(albumSelect.type, 3);
@@ -28,7 +28,7 @@ test('renders artist, album, and track selectors from the real catalogue', t => 
     assert.equal(albums.components[1].toJSON().components[2].disabled, false);
 
     const albumId = Number.parseInt(albumSelect.options[0].value, 10);
-    const album = browser.renderAlbum(session.id, albumId, 0);
+    const album = await browser.renderAlbum(session.id, albumId, 0);
     const componentIds = album.components
         .flatMap(row => row.toJSON().components)
         .map(component => component.custom_id)
@@ -39,14 +39,14 @@ test('renders artist, album, and track selectors from the real catalogue', t => 
     assert.ok(componentIds.some(id => id.startsWith('phyu:back-albums:')));
 });
 
-test('paginates a 96-track album within Discord select-menu limits', t => {
+test('paginates a 96-track album within Discord select-menu limits', async t => {
     const catalogue = new PhyuCatalog(databasePath);
     const browser = new PhyuBrowser({ catalogue });
     t.after(() => catalogue.close());
 
     const session = browser.createSession('user-2');
-    const firstPage = browser.renderAlbum(session.id, 1584, 0);
-    const lastPage = browser.renderAlbum(session.id, 1584, 3);
+    const firstPage = await browser.renderAlbum(session.id, 1584, 0);
+    const lastPage = await browser.renderAlbum(session.id, 1584, 3);
     const firstOptions = firstPage.components[0].toJSON().components[0].options;
     const lastOptions = lastPage.components[0].toJSON().components[0].options;
 
@@ -55,14 +55,14 @@ test('paginates a 96-track album within Discord select-menu limits', t => {
     assert.match(lastPage.embeds[0].data.footer.text, /4\/4/);
 });
 
-test('renders paginated track search results with a direct-play selector', t => {
+test('renders paginated track search results with a direct-play selector', async t => {
     const catalogue = new PhyuCatalog(databasePath);
     const browser = new PhyuBrowser({ catalogue });
     t.after(() => catalogue.close());
 
     const session = browser.createTrackSearchSession('search-user', 'နွေ');
-    const firstPage = browser.renderTrackSearch(session.id, 0);
-    const secondPage = browser.renderTrackSearch(session.id, 1);
+    const firstPage = await browser.renderTrackSearch(session.id, 0);
+    const secondPage = await browser.renderTrackSearch(session.id, 1);
     const firstSelect = firstPage.components[0].toJSON().components[0];
     const secondSelect = secondPage.components[0].toJSON().components[0];
 

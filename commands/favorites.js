@@ -66,7 +66,7 @@ module.exports = {
 
         const service = getFavoriteService();
         if (action === 'add') {
-            const tracks = service.catalogue.searchTracks(focused, { limit: 25 });
+            const tracks = await service.catalogue.searchTracks(focused, { limit: 25 });
             return interaction.respond(tracks.map(track => ({
                 name: suggestionLabel('Phyu Track', track.title, [track.artist, track.album].filter(Boolean).join(' • ')),
                 value: `phyu:track:${track.id}`,
@@ -111,7 +111,7 @@ module.exports = {
                         content: 'Start typing a song name, then choose one of Daisy’s suggestions.',
                     });
                 }
-                const catalogueTrack = service.catalogue.getTrackById(trackId);
+                const catalogueTrack = await service.catalogue.getTrackById(trackId);
                 if (!catalogueTrack) {
                     return interaction.editReply({ content: 'That suggested Phyu track is no longer available.' });
                 }
@@ -143,7 +143,7 @@ module.exports = {
 
                 const validationError = validatePlayback(interaction);
                 if (validationError) return interaction.editReply({ content: validationError });
-                const track = service.resolveFavorite(favorite);
+                const track = await service.resolveFavorite(favorite);
                 const result = await queueMusicTracks(
                     interaction,
                     client,

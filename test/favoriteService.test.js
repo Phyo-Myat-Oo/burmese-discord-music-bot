@@ -98,7 +98,7 @@ test('toggles a user favorite on and off using stable track identity', t => {
     assert.equal(service.isFavorite('user-1', track), false);
 });
 
-test('re-resolves a Phyu favorite from its stable catalogue identity', t => {
+test('re-resolves a Phyu favorite from its stable catalogue identity', async t => {
     const { service } = createFixture(t);
     service.addFavorite('user-1', {
         id: 'phyu:track:42',
@@ -113,7 +113,7 @@ test('re-resolves a Phyu favorite from its stable catalogue identity', t => {
     });
 
     const favorite = service.listFavorites('user-1')[0];
-    const resolved = service.resolveFavorite(favorite);
+    const resolved = await service.resolveFavorite(favorite);
 
     assert.equal(resolved.url, 'phyu:track:42');
     assert.equal(resolved.title, 'Catalogue song');
