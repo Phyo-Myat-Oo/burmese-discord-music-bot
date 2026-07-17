@@ -47,9 +47,8 @@ class PhyuBrowser {
     }
 
     createTrackSearchSession(ownerId, trackQuery) {
-        const query = String(trackQuery || '').trim();
-        const session = this.createSession(ownerId, query);
-        session.trackQuery = query;
+        const session = this.createSession(ownerId);
+        session.trackQuery = String(trackQuery || '').trim();
         return session;
     }
 
@@ -133,7 +132,6 @@ class PhyuBrowser {
             session.trackQuery,
             { limit: 1, offset: offset + PAGE_SIZE }
         ).length > 0;
-        const artists = this.catalogue.searchArtists(session.trackQuery, { limit: PAGE_SIZE, offset: 0 });
         const description = items.map((item, index) =>
             item.type === 'album'
                 ? `**${offset + index + 1}. 💿 Album** — ${truncate(item.title, 70)} (${item.trackCount} tracks)`
@@ -150,53 +148,29 @@ class PhyuBrowser {
             .setTimestamp();
         if (items[0]?.coverUrl) embed.setThumbnail(items[0].coverUrl);
 
-        const components = [];
+        if (!items.length) return { embeds: [embed], components: [] };
 
-        if (items.length) {
-            const select = new StringSelectMenuBuilder()
-                .setCustomId(`phyu:search-item-select:${session.id}:${page}`)
-                .setPlaceholder('Select a track or album')
-                .addOptions(items.map(item => ({
-                    label: truncate(`[${item.type === 'album' ? 'Album' : 'Track'}] ${item.title}`, 100),
-                    description: truncate(
-                        item.type === 'album'
-                            ? `${item.artist || 'Various artists'} • ${item.trackCount} tracks`
-                            : `${item.artist || 'Unknown artist'} • ${item.album || 'Unknown album'}`,
-                        100
-                    ),
-                    value: `${item.type}:${item.id}`,
-                })));
-            components.push(new ActionRowBuilder().addComponents(select));
-        }
+        const select = new StringSelectMenuBuilder()
+            .setCustomId(`phyu:search-item-select:${session.id}:${page}`)
+            .setPlaceholder('Select a track or album')
+            .addOptions(items.map(item => ({
+                label: truncate(`[${item.type === 'album' ? 'Album' : 'Track'}] ${item.title}`, 100),
+                description: truncate(
+                    item.type === 'album'
+                        ? `${item.artist || 'Various artists'} • ${item.trackCount} tracks`
+                        : `${item.artist || 'Unknown artist'} • ${item.album || 'Unknown album'}`,
+                    100
+                ),
+                value: `${item.type}:${item.id}`,
+            })));
 
-        if (artists.length) {
-            const artistSelect = new StringSelectMenuBuilder()
-                .setCustomId(`phyu:artist-select:${session.id}:0`)
-                .setPlaceholder('Browse by matching artist')
-                .addOptions(artists.map(artist => ({
-                    label: truncate(`[Artist] ${artist.name}`, 100),
-                    description: truncate(`${artist.albumCount} albums • ${artist.trackCount} tracks`, 100),
-                    value: String(artist.id),
-                })));
-            components.push(new ActionRowBuilder().addComponents(artistSelect));
-        }
-
-        components.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`phyu:random-track:${session.id}`)
-                .setLabel('Random track')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId(`phyu:random-album:${session.id}`)
-                .setLabel('Random album')
-                .setStyle(ButtonStyle.Secondary)
-        ));
-
-        if (items.length) {
-            components.push(this.paginationRow('search-item-page', session.id, page, page > 0, hasNext));
-        }
-
-        return { embeds: [embed], components };
+        return {
+            embeds: [embed],
+            components: [
+                new ActionRowBuilder().addComponents(select),
+                this.paginationRow('search-item-page', session.id, page, page > 0, hasNext),
+            ],
+        };
     }
 
     renderAlbums(sessionId, artistId, requestedPage = 0) {

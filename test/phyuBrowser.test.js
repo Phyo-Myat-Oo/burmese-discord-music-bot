@@ -72,13 +72,7 @@ test('renders paginated track search results with a direct-play selector', t => 
     assert.ok(firstSelect.options.some(option => option.label.startsWith('[Track]')));
     assert.ok(firstSelect.options.some(option => option.label.startsWith('[Album]')));
     assert.ok(firstSelect.options.every(option => /^(track|album):\d+$/.test(option.value)));
-    const artistSelect = firstPage.components[1].toJSON().components[0];
-    const randomButtons = firstPage.components[2].toJSON().components;
-    assert.match(artistSelect.custom_id, /^phyu:artist-select:/);
-    assert.ok(artistSelect.options.every(option => option.label.startsWith('[Artist]')));
-    assert.equal(randomButtons[0].custom_id.startsWith('phyu:random-track:'), true);
-    assert.equal(randomButtons[1].custom_id.startsWith('phyu:random-album:'), true);
-    assert.equal(firstPage.components[3].toJSON().components[1].disabled, false);
+    assert.equal(firstPage.components[1].toJSON().components[1].disabled, false);
 });
 
 test('restricts browser controls to their owner and expires inactive sessions', t => {

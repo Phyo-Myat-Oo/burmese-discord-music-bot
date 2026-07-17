@@ -42,7 +42,7 @@ test('loads a stable track with provider and source metadata', t => {
     assert.ok(track.album);
     assert.ok(track.artist);
     assert.ok(track.pcloudCode);
-    assert.match(String(track.pcloudFileId), /^[1-9]\d*$/);
+    assert.ok(Number.isSafeInteger(track.pcloudFileId));
     assert.match(track.postUrl, /^https:\/\/phyuniwarpyar\.blogspot\.com\//);
     assert.match(track.coverUrl, /^https:\/\//);
     assert.equal('url' in track, false);

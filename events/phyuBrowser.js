@@ -31,9 +31,7 @@ module.exports = {
                 action === 'track-select' ||
                 action === 'search-track-select' ||
                 action === 'search-item-select' ||
-                action === 'play-album' ||
-                action === 'random-track' ||
-                action === 'random-album'
+                action === 'play-album'
             ) {
                 const validationError = validatePlayback(interaction);
                 if (validationError) return replyEphemeral(interaction, validationError);
@@ -141,59 +139,6 @@ module.exports = {
                         content: itemType === 'album'
                             ? `✅ Album queued: **${tracks[0].album}** (${tracks.length} tracks).`
                             : `✅ Track sent to Daisy's player: **${tracks[0].title}**.`,
-                        embeds: [],
-                        components: [],
-                    });
-                    return result;
-                }
-
-                case 'random-track': {
-                    const track = browser.catalogue.getRandomTrack();
-                    if (!track) throw new Error('No random track is available in the catalogue.');
-
-                    const result = await queueCatalogueTracks(
-                        interaction,
-                        interaction.client,
-                        [track],
-                        { responseInteraction: false }
-                    );
-                    if (!result.success) {
-                        return interaction.editReply({
-                            content: result.message || 'Daisy could not play a random track.',
-                            embeds: [],
-                            components: [],
-                        });
-                    }
-                    await interaction.editReply({
-                        content: `âœ… Random track sent to Daisy's player: **${track.title}**.`,
-                        embeds: [],
-                        components: [],
-                    });
-                    return result;
-                }
-
-                case 'random-album': {
-                    const album = browser.catalogue.getRandomAlbum();
-                    if (!album) throw new Error('No random album is available in the catalogue.');
-
-                    const tracks = browser.catalogue.getAlbumTracks(album.id);
-                    if (!tracks.length) throw new Error('That random album has no playable tracks.');
-
-                    const result = await queueCatalogueTracks(
-                        interaction,
-                        interaction.client,
-                        tracks,
-                        { isPlaylist: true, responseInteraction: false }
-                    );
-                    if (!result.success) {
-                        return interaction.editReply({
-                            content: result.message || 'Daisy could not queue a random album.',
-                            embeds: [],
-                            components: [],
-                        });
-                    }
-                    await interaction.editReply({
-                        content: `âœ… Random album queued: **${album.title}** (${tracks.length} tracks).`,
                         embeds: [],
                         components: [],
                     });

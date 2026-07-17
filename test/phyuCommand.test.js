@@ -123,17 +123,12 @@ test('keeps the paginated search picker as the advanced flow', async () => {
 
     await command.execute(interaction);
 
-    assert.equal(reply.components.length, 4);
+    assert.equal(reply.components.length, 2);
     const select = reply.components[0].toJSON().components[0];
-    const artistSelect = reply.components[1].toJSON().components[0];
-    const randomButtons = reply.components[2].toJSON().components;
     assert.equal(select.options.length, 25);
     assert.match(select.custom_id, /^phyu:search-item-select:/);
     assert.ok(select.options.some(option => option.label.startsWith('[Track]')));
     assert.ok(select.options.some(option => option.label.startsWith('[Album]')));
-    assert.match(artistSelect.custom_id, /^phyu:artist-select:/);
-    assert.equal(randomButtons[0].custom_id.startsWith('phyu:random-track:'), true);
-    assert.equal(randomButtons[1].custom_id.startsWith('phyu:random-album:'), true);
 });
 
 test('converts a catalogue row into a stable MusicBot track', () => {

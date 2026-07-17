@@ -1,3 +1,378 @@
 {
-    "players": {}
+    "players": {
+        "1345060155821129810": {
+            "guildId": "1345060155821129810",
+            "voiceChannelId": "1525896878640599220",
+            "textChannelId": "1525896878640599220",
+            "currentTrack": null,
+            "queue": [
+                {
+                    "id": "phyu:track:7807",
+                    "title": "အားနည်းချက်ရှိသူ - ဂရေဟမ်",
+                    "url": "phyu:track:7807",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ဂရေဟမ်",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7807,
+                            "stableKey": "phyu:track:7807",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296564986,
+                            "mediafireQuickKey": "0fdzlctxshca9ik",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7808",
+                    "title": "အပြစ်ရှိတဲ့အတိုင်း - ဆုန်သင်းပါရ်",
+                    "url": "phyu:track:7808",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ဆုန်သင်းပါရ်",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7808,
+                            "stableKey": "phyu:track:7808",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296568889,
+                            "mediafireQuickKey": "ggkxvnhd2arz2gz",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7809",
+                    "title": "မင်းရည်းစားသိရဲ့လား - မီးမီးခဲ",
+                    "url": "phyu:track:7809",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "မီးမီးခဲ",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7809,
+                            "stableKey": "phyu:track:7809",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296572125,
+                            "mediafireQuickKey": "af2aqgpmj3i2j2j",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7810",
+                    "title": "တို့ကတဲ့ဇာတ် - ဂရေဟမ်",
+                    "url": "phyu:track:7810",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ဂရေဟမ်",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7810,
+                            "stableKey": "phyu:track:7810",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296573311,
+                            "mediafireQuickKey": "z3ul7t2vh3sm267",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7811",
+                    "title": "လွမ်းရတဲ့ရင်ခွင် - ချောစုခင်",
+                    "url": "phyu:track:7811",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ချောစုခင်",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7811,
+                            "stableKey": "phyu:track:7811",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296576880,
+                            "mediafireQuickKey": "xhmd06f6juy2npk",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7812",
+                    "title": "ပြန်လှည့်မကြည့်တော့တဲ့သူ - ဆုန်သင်းပါရ်",
+                    "url": "phyu:track:7812",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ဆုန်သင်းပါရ်",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7812,
+                            "stableKey": "phyu:track:7812",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296576446,
+                            "mediafireQuickKey": "7sc4y9earpzo4st",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7813",
+                    "title": "သူငယ်ချင်းအဆင့် - ကဗျာဘွဲ့မှူး",
+                    "url": "phyu:track:7813",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ကဗျာဘွဲ့မှူး",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7813,
+                            "stableKey": "phyu:track:7813",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296578135,
+                            "mediafireQuickKey": "9swqozuun9dhgv6",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7814",
+                    "title": "ဆောင်း - ရင်ဂို",
+                    "url": "phyu:track:7814",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ရင်ဂို",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7814,
+                            "stableKey": "phyu:track:7814",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296585651,
+                            "mediafireQuickKey": "3vim1mighkdwm12",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7815",
+                    "title": "ဖိုးချွဲ - မီးမီးခဲ",
+                    "url": "phyu:track:7815",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "မီးမီးခဲ",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7815,
+                            "stableKey": "phyu:track:7815",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296579984,
+                            "mediafireQuickKey": "bw3jhycdttv7svq",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7816",
+                    "title": "သွားတော့အချစ်ရယ် - ကဗျာဘွဲ့မှူး",
+                    "url": "phyu:track:7816",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ကဗျာဘွဲ့မှူး",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7816,
+                            "stableKey": "phyu:track:7816",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296581102,
+                            "mediafireQuickKey": "4sikib4ep4hib0q",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7817",
+                    "title": "ချစ်နေရရင်ပြီးတာပဲ - ချောစုခင်",
+                    "url": "phyu:track:7817",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "ချောစုခင်",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7817,
+                            "stableKey": "phyu:track:7817",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296582631,
+                            "mediafireQuickKey": "y1whq0qztuh5abg",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                },
+                {
+                    "id": "phyu:track:7818",
+                    "title": "မိုးဘာကြောင့်ရွာ (music)",
+                    "url": "phyu:track:7818",
+                    "sourceUrl": "https://phyuniwarpyar.blogspot.com/2026/03/va.html",
+                    "duration": 0,
+                    "thumbnail": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj01Q8m_gAncJXPx2bYcUQ8-RNRb7PoODT41qOuPOf3lNA2RR_McbVM5mzwtWDdhj65h2a3_ZBXxczJKwuhnEX-o8Dt866iFzheNXP9XGFhyphenhyphen4UlZg_0EJQW6ywrT1Q2u7sJo8kMiiOHNSzh5rTn1Fv3nD7aqBLUMJaj6A5v5ZCD3FGLndf6ZGRS_29Q4i4/w400-h393/14.Tape%20Cover.jpg",
+                    "artist": "မိုးဘာကြောင့်ရွာ (music)",
+                    "album": "VA - ချစ်နေရရင်ပြီးတာပဲ",
+                    "platform": "phyu",
+                    "uploader": null,
+                    "youtubeUrl": null,
+                    "soundcloudUrl": null,
+                    "spotifyUrl": null,
+                    "isLive": false,
+                    "addedAt": 1784127304262,
+                    "requesterId": "864008629401157684",
+                    "requesterTag": "whitecloud3400",
+                    "extra": {
+                        "catalogue": {
+                            "trackId": 7818,
+                            "stableKey": "phyu:track:7818",
+                            "pcloudCode": "kZtEod5Zfgko5L1FStQ1aALUcNmrTVaojhVV",
+                            "pcloudFileId": 85296585094,
+                            "mediafireQuickKey": "buersoiehotkjrz",
+                            "mediafireUrl": "https://www.mediafire.com/folder/upq7z9nupdbhx/2026+Up"
+                        }
+                    }
+                }
+            ],
+            "previousTracks": [],
+            "volume": 100,
+            "loop": false,
+            "shuffle": false,
+            "autoplay": false,
+            "paused": false,
+            "pauseReasons": [],
+            "playbackPositionMs": 0,
+            "currentTrackStartOffsetMs": 0,
+            "lastPlaybackPosition": 0,
+            "requesterId": "864008629401157684",
+            "nowPlayingMessageId": "1526965302846292039",
+            "nowPlayingChannelId": "1525896878640599220",
+            "sessionId": "mrm7btxkdi7s68snr6",
+            "downloadedFiles": [],
+            "currentDownloadedFile": null,
+            "updatedAt": 1784127320471,
+            "reason": "shutdown"
+        }
+    }
 }

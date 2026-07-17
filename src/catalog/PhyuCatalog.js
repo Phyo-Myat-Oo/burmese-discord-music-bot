@@ -16,7 +16,7 @@ const TRACK_SELECT = `
         t.content_type,
         t.duration,
         t.artist_text,
-        CAST(t.pcloud_file_id AS TEXT) AS pcloud_file_id,
+        t.pcloud_file_id,
         t.mediafire_quick_key,
         a.id AS album_id,
         a.display_title AS album,
