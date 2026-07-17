@@ -22,7 +22,7 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('search')
-                .setDescription('Search YouTube and choose from nine results')
+                .setDescription('Search paginated YouTube results and choose one or more')
                 .addStringOption(option =>
                     option.setName('query')
                         .setDescription('Song name or artist to search')

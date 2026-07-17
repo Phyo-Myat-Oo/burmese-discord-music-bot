@@ -298,8 +298,6 @@ Expected environment variables:
 - `COOKIES_FILE`
 - `SPOTIFY_CLIENT_ID`
 - `SPOTIFY_CLIENT_SECRET`
-- `GENIUS_CLIENT_ID`
-- `GENIUS_CLIENT_SECRET`
 
 Never commit:
 

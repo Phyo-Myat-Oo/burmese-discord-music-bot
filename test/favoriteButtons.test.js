@@ -14,7 +14,6 @@ test('adds one Favorite toggle action to the now-playing card', async () => {
         loop: false,
         autoplay: false,
         currentTrack: { title: 'Current song' },
-        hasLyrics: () => false,
     };
 
     const rows = await manager.createControlButtons(player);

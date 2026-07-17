@@ -1,63 +1,65 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    PermissionFlagsBits,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder,
+} = require('discord.js');
 const config = require('../config.js');
 const YouTube = require('./YouTube.js');
 const LanguageManager = require('./LanguageManager');
 
+const PAGE_SIZE = 9;
+const SEARCH_LIMIT = 25;
+const SESSION_TTL_MS = 5 * 60 * 1000;
+
 module.exports = {
+    PAGE_SIZE,
+    SEARCH_LIMIT,
+
     async execute(interaction) {
         const query = interaction.options.getString('query');
         const guildId = interaction.guild.id;
         const member = interaction.member;
         const guild = interaction.guild;
-        const channel = interaction.channel;
 
         try {
             await interaction.deferReply();
 
-            // Temel kontroller
             const validationResult = await this.validateRequest(interaction, member, guild);
             if (!validationResult.success) {
-                return await interaction.editReply({
-                    content: validationResult.message
-                });
+                return interaction.editReply({ content: validationResult.message });
             }
 
-            // Arama yap
-            const results = await YouTube.search(query, 9, guildId);
-
+            // One flat yt-dlp request fetches enough entries for three pages.
+            const results = await YouTube.search(query, SEARCH_LIMIT, guildId);
             if (!results || results.length === 0) {
                 const noResultsMsg = await LanguageManager.getTranslation(guildId, 'commands.search.no_results');
-                return await interaction.editReply({
-                    content: noResultsMsg
-                });
+                return interaction.editReply({ content: noResultsMsg });
             }
 
-            // Çalan müzik yoksa arama menüsü göster
-            await this.showSearchMenu(interaction, results, query, guildId);
-
+            return this.showSearchMenu(interaction, results, query, guildId);
         } catch (error) {
+            console.error('[YouTubeSearch] Search failed:', error);
             const errorMsg = await LanguageManager.getTranslation(guildId, 'commands.search.error_search');
-            await interaction.editReply({
-                content: errorMsg
-            });
+            return interaction.editReply({ content: errorMsg });
         }
     },
 
-    async validateRequest(interaction, member, guild) {
-        // Ses kanalı kontrolü
+    async validateRequest(_interaction, member, guild) {
         if (!member.voice.channel) {
             const errorMsg = await LanguageManager.getTranslation(guild.id, 'commands.play.voice_channel_required');
             return { success: false, message: errorMsg };
         }
 
-        // İzin kontrolü
         const permissions = member.voice.channel.permissionsFor(guild.members.me);
         if (!permissions.has(PermissionFlagsBits.Connect) || !permissions.has(PermissionFlagsBits.Speak)) {
             const errorMsg = await LanguageManager.getTranslation(guild.id, 'commands.play.no_permissions');
             return { success: false, message: errorMsg };
         }
 
-        // Bot farklı kanalda mı kontrolü
         const botVoiceChannel = guild.members.me.voice.channel;
         if (botVoiceChannel && botVoiceChannel.id !== member.voice.channel.id) {
             const errorMsg = await LanguageManager.getTranslation(guild.id, 'commands.play.same_channel_required');
@@ -68,110 +70,170 @@ module.exports = {
     },
 
     async showSearchMenu(interaction, results, query, guildId) {
-        // Get translations
-        const searchTitle = await LanguageManager.getTranslation(guildId, 'commands.search.title', { query });
-        const selectDescription = await LanguageManager.getTranslation(guildId, 'commands.search.select_description');
-        const footerText = await LanguageManager.getTranslation(guildId, 'commands.search.footer', { count: results.length });
-        const unknownTitle = await LanguageManager.getTranslation(guildId, 'commands.search.unknown_title');
-        const unknownChannel = await LanguageManager.getTranslation(guildId, 'commands.search.unknown_channel');
-        const unknownDuration = await LanguageManager.getTranslation(guildId, 'commands.search.unknown_duration');
+        if (!global.searchResults) global.searchResults = new Map();
 
-        // Create embed
+        const previousSession = global.searchResults.get(interaction.user.id);
+        if (previousSession?.cleanupTimer) clearTimeout(previousSession.cleanupTimer);
+
+        const session = {
+            query,
+            results,
+            page: 0,
+            selectedIndexes: new Set(),
+            timestamp: Date.now(),
+            cleanupTimer: null,
+        };
+
+        session.cleanupTimer = setTimeout(() => {
+            if (global.searchResults?.get(interaction.user.id) === session) {
+                global.searchResults.delete(interaction.user.id);
+            }
+        }, SESSION_TTL_MS);
+        session.cleanupTimer.unref?.();
+        global.searchResults.set(interaction.user.id, session);
+
+        return interaction.editReply(await this.renderSearchMenu(session, guildId));
+    },
+
+    async renderSearchMenu(session, guildId) {
+        const totalPages = Math.max(1, Math.ceil(session.results.length / PAGE_SIZE));
+        session.page = Math.max(0, Math.min(Number(session.page) || 0, totalPages - 1));
+
+        const start = session.page * PAGE_SIZE;
+        const pageResults = session.results.slice(start, start + PAGE_SIZE);
+        const [
+            searchTitle,
+            selectDescription,
+            footerText,
+            unknownTitle,
+            unknownChannel,
+            unknownDuration,
+            cancelButtonLabel,
+        ] = await Promise.all([
+            LanguageManager.getTranslation(guildId, 'commands.search.title', { query: session.query }),
+            LanguageManager.getTranslation(guildId, 'commands.search.select_description'),
+            LanguageManager.getTranslation(guildId, 'commands.search.footer', { count: session.results.length }),
+            LanguageManager.getTranslation(guildId, 'commands.search.unknown_title'),
+            LanguageManager.getTranslation(guildId, 'commands.search.unknown_channel'),
+            LanguageManager.getTranslation(guildId, 'commands.search.unknown_duration'),
+            LanguageManager.getTranslation(guildId, 'commands.search.button_cancel'),
+        ]);
+
+        const selectedCount = session.selectedIndexes.size;
         const embed = new EmbedBuilder()
             .setTitle(searchTitle)
             .setColor(config.bot.embedColor)
-            .setDescription(selectDescription)
-            .setFooter({
-                text: footerText
-            })
+            .setDescription([
+                selectDescription,
+                `စာမျက်နှာ **${session.page + 1}/${totalPages}** • ရွေးထားသောသီချင်း **${selectedCount} ပုဒ်**`,
+                'စာမျက်နှာများပြောင်းပြီး သီချင်းရွေးနိုင်ပါတယ်။ ပြီးလျှင် **Add Selected** ကိုနှိပ်ပါ။',
+            ].join('\n'))
+            .setFooter({ text: `${footerText} • ${start + 1}-${start + pageResults.length}/${session.results.length}` })
             .setTimestamp();
 
-        // Add field for each result
-        const maxResults = Math.min(results.length, 9);
-        for (let index = 0; index < maxResults; index++) {
-            const result = results[index];
+        for (let pageIndex = 0; pageIndex < pageResults.length; pageIndex++) {
+            const absoluteIndex = start + pageIndex;
+            const result = pageResults[pageIndex];
             const title = result.title || unknownTitle;
             const uploader = result.artist || unknownChannel;
-            const duration = this.formatDuration(result?.duration, unknownDuration);
+            const duration = this.formatDuration(result.duration, unknownDuration);
             const value = await LanguageManager.getTranslation(guildId, 'commands.search.result_line', {
                 uploader,
-                duration
+                duration,
             });
-
+            const selectedMark = session.selectedIndexes.has(absoluteIndex) ? ' ✅' : '';
             embed.addFields({
-                name: `${index + 1}. ${title}`,
+                name: `${absoluteIndex + 1}. ${title}${selectedMark}`,
                 value,
-                inline: false
+                inline: false,
             });
         }
 
-        // Create buttons (2 rows, max 4+5 buttons)
-        const row1 = new ActionRowBuilder();
-        const row2 = new ActionRowBuilder();
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('search_pick')
+            .setPlaceholder('ဒီစာမျက်နှာမှ သီချင်းများရွေးပါ')
+            .setMinValues(0)
+            .setMaxValues(pageResults.length);
 
-        // 9 songs + 1 cancel = 10 buttons max
-        let hasSecondRow = false;
+        for (let pageIndex = 0; pageIndex < pageResults.length; pageIndex++) {
+            const absoluteIndex = start + pageIndex;
+            const result = pageResults[pageIndex];
+            const title = result.title || unknownTitle;
+            const artist = result.artist || unknownChannel;
+            const duration = this.formatDuration(result.duration, unknownDuration);
+            selectMenu.addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(this.truncate(`${absoluteIndex + 1}. ${title}`, 100))
+                    .setDescription(this.truncate(`${artist} • ${duration}`, 100))
+                    .setValue(String(absoluteIndex))
+                    .setDefault(session.selectedIndexes.has(absoluteIndex))
+            );
+        }
 
-        for (let i = 0; i < maxResults; i++) {
-            const button = new ButtonBuilder()
-                .setCustomId(`search_select_${i}`)
-                .setLabel(`${i + 1}`)
+        const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+        const controls = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('search_page_previous')
+                .setLabel('Previous')
+                .setEmoji('⬅️')
                 .setStyle(ButtonStyle.Secondary)
+                .setDisabled(session.page === 0),
+            new ButtonBuilder()
+                .setCustomId('search_page_next')
+                .setLabel('Next')
+                .setEmoji('➡️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(session.page >= totalPages - 1),
+            new ButtonBuilder()
+                .setCustomId('search_add')
+                .setLabel(`Add Selected (${selectedCount})`)
+                .setEmoji('➕')
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(selectedCount === 0),
+            new ButtonBuilder()
+                .setCustomId('search_cancel')
+                .setLabel(cancelButtonLabel)
+                .setEmoji('❌')
+                .setStyle(ButtonStyle.Danger)
+        );
 
-            // First 4 buttons in first row, rest in second row (max 5)
-            if (i < 4) {
-                row1.addComponents(button);
-            } else if (i < 9) {
-                row2.addComponents(button);
-                hasSecondRow = true;
+        return { embeds: [embed], components: [selectRow, controls] };
+    },
+
+    updatePageSelection(session, values) {
+        const start = session.page * PAGE_SIZE;
+        const end = Math.min(start + PAGE_SIZE, session.results.length);
+        for (let index = start; index < end; index++) {
+            session.selectedIndexes.delete(index);
+        }
+
+        for (const value of values || []) {
+            const index = Number(value);
+            if (Number.isInteger(index) && index >= start && index < end) {
+                session.selectedIndexes.add(index);
             }
         }
+        session.timestamp = Date.now();
+    },
 
-        // Add cancel button - always in first row
-        const cancelButtonLabel = await LanguageManager.getTranslation(guildId, 'commands.search.button_cancel');
-        const cancelButton = new ButtonBuilder()
-            .setCustomId('search_cancel')
-            .setLabel(cancelButtonLabel)
-            .setStyle(ButtonStyle.Danger)
-            .setEmoji('❌');
+    deleteSession(userId) {
+        const session = global.searchResults?.get(userId);
+        if (session?.cleanupTimer) clearTimeout(session.cleanupTimer);
+        global.searchResults?.delete(userId);
+    },
 
-        row1.addComponents(cancelButton);
-
-        const components = [row1];
-        if (hasSecondRow && row2.components.length > 0) {
-            components.push(row2);
-        }
-
-        // Store search results temporarily
-        if (!global.searchResults) global.searchResults = new Map();
-        global.searchResults.set(interaction.user.id, {
-            query: query,
-            results: results,
-            timestamp: Date.now()
-        });
-
-        // Clean up after 5 minutes
-        setTimeout(() => {
-            global.searchResults.delete(interaction.user.id);
-        }, 5 * 60 * 1000);
-
-        await interaction.editReply({
-            embeds: [embed],
-            components: components
-        });
+    truncate(value, maxLength) {
+        const text = String(value || '');
+        return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
     },
 
     formatDuration(seconds, unknownLabel = 'Unknown') {
         if (!seconds || seconds === 0) return unknownLabel;
-
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = Math.floor(seconds % 60);
-
-        if (hours > 0) {
-            return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        } else {
-            return `${minutes}:${secs.toString().padStart(2, '0')}`;
-        }
-    }
+        return hours > 0
+            ? `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+            : `${minutes}:${secs.toString().padStart(2, '0')}`;
+    },
 };

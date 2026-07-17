@@ -17,7 +17,7 @@ module.exports = {
         if (interaction.customId.startsWith('phyu:') || interaction.customId.startsWith('favorite:')) return;
 
         // Special controls for search buttons
-        if (interaction.isButton() && interaction.customId.startsWith('search_')) {
+        if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('search_')) {
             return await this.handleSearchInteraction(interaction, client);
         }
 
@@ -119,10 +119,6 @@ module.exports = {
 
                 case 'music_autoplay':
                     await this.handleAutoplay(interaction, player, requesterId);
-                    break;
-
-                case 'music_lyrics':
-                    await this.handleLyrics(interaction, player);
                     break;
 
                 default:
@@ -773,9 +769,10 @@ module.exports = {
         }
 
         const userSearchData = global.searchResults.get(interaction.user.id);
+        const YouTubeSearchCommand = require('../src/YouTubeSearchCommand');
 
         if (interaction.customId === 'search_cancel') {
-            global.searchResults.delete(interaction.user.id);
+            YouTubeSearchCommand.deleteSession(interaction.user.id);
 
             const embed = new EmbedBuilder()
                 .setTitle(await LanguageManager.getTranslation(guild?.id, 'buttonhandler.search_cancelled_title'))
@@ -789,11 +786,39 @@ module.exports = {
             });
         }
 
-        // Get selected song index
-        const selectedIndex = parseInt(interaction.customId.replace('search_select_', ''));
-        const selectedTrack = userSearchData.results[selectedIndex];
+        if (interaction.customId === 'search_pick' && interaction.isStringSelectMenu()) {
+            await interaction.deferUpdate();
+            YouTubeSearchCommand.updatePageSelection(userSearchData, interaction.values);
+            return interaction.editReply(
+                await YouTubeSearchCommand.renderSearchMenu(userSearchData, guild.id)
+            );
+        }
 
-        if (!selectedTrack) {
+        if (interaction.customId === 'search_page_previous' || interaction.customId === 'search_page_next') {
+            await interaction.deferUpdate();
+            const direction = interaction.customId === 'search_page_next' ? 1 : -1;
+            userSearchData.page += direction;
+            userSearchData.timestamp = Date.now();
+            return interaction.editReply(
+                await YouTubeSearchCommand.renderSearchMenu(userSearchData, guild.id)
+            );
+        }
+
+        if (interaction.customId !== 'search_add') {
+            return interaction.reply({
+                content: await LanguageManager.getTranslation(guild?.id, 'buttonhandler.invalid_selection'),
+                flags: [1 << 6]
+            });
+        }
+
+        // Queue selections from every page in the original result order.
+        const uniqueIndexes = [...userSearchData.selectedIndexes]
+            .sort((left, right) => left - right);
+        const selectedTracks = uniqueIndexes
+            .map(index => userSearchData.results[index])
+            .filter(Boolean);
+
+        if (!selectedTracks.length || selectedTracks.length !== uniqueIndexes.length) {
             return await interaction.reply({
                 content: await LanguageManager.getTranslation(guild?.id, 'buttonhandler.invalid_selection'),
                 flags: [1 << 6]
@@ -803,9 +828,12 @@ module.exports = {
         await interaction.deferUpdate();
 
         // Işlem mesajı göster
+        const processingDescription = selectedTracks.length === 1
+            ? await LanguageManager.getTranslation(guild?.id, 'buttonhandler.adding_song_desc', { title: selectedTracks[0].title })
+            : `ရွေးထားသော သီချင်း **${selectedTracks.length} ပုဒ်** ကို queue ထဲ ထည့်နေပါတယ်…`;
         const processingEmbed = new EmbedBuilder()
             .setTitle('🔄 ' + await LanguageManager.getTranslation(guild?.id, 'buttonhandler.processing'))
-            .setDescription(await LanguageManager.getTranslation(guild?.id, 'buttonhandler.adding_song_desc', { title: selectedTrack.title }))
+            .setDescription(processingDescription)
             .setColor('#FFAA00')
             .setTimestamp();
 
@@ -839,15 +867,15 @@ module.exports = {
             const result = await client.musicEmbedManager.handleMusicData(
                 guild.id,
                 {
-                    isPlaylist: false,
-                    tracks: [selectedTrack]
+                    isPlaylist: selectedTracks.length > 1,
+                    tracks: selectedTracks
                 },
                 member,
                 interaction
             );
 
             // Search results temizle
-            global.searchResults.delete(interaction.user.id);
+            YouTubeSearchCommand.deleteSession(interaction.user.id);
 
             if (!result.success) {
                 const errorEmbed = new EmbedBuilder()
@@ -876,143 +904,4 @@ module.exports = {
         }
     },
 
-    async handleLyrics(interaction, player) {
-        const LyricsManager = require('../src/LyricsManager');
-        const guildId = interaction.guild?.id;
-
-        try {
-            if (!player.currentTrack) {
-                return await interaction.reply({
-                    content: await LanguageManager.getTranslation(guildId, 'buttonhandler.no_song_playing'),
-                    flags: [1 << 6]
-                });
-            }
-
-            if (!player.hasLyrics || !player.hasLyrics()) {
-                const noLyricsMsg = await LanguageManager.getTranslation(guildId, 'buttonhandler.no_lyrics_found') || 'No lyrics found for this song.';
-                return await interaction.reply({
-                    content: `🎤 ${noLyricsMsg}`,
-                    flags: [1 << 6]
-                });
-            }
-
-            await interaction.deferReply({ ephemeral: true });
-
-            const lyricsData = player.currentLyrics;
-            const pages = LyricsManager.formatFullLyrics(lyricsData, 4000);
-
-            if (pages.length === 0) {
-                return await interaction.editReply({
-                    content: await LanguageManager.getTranslation(guildId, 'buttonhandler.lyrics_unavailable') || 'Lyrics are unavailable.'
-                });
-            }
-
-            const lyricsTitle = await LanguageManager.getTranslation(guildId, 'buttonhandler.lyrics_title') || 'Song Lyrics';
-            
-            // If only one page, send directly
-            if (pages.length === 1) {
-                const embed = new EmbedBuilder()
-                    .setTitle(`🎤 ${lyricsTitle}`)
-                    .setDescription(`**${player.currentTrack.title}**\n${player.currentTrack.artist ? `*by ${player.currentTrack.artist}*\n` : ''}\n${pages[0]}`)
-                    .setColor(config.bot.embedColor)
-                    .setFooter({ text: `Source: ${lyricsData.source}` })
-                    .setTimestamp();
-
-                return await interaction.editReply({ embeds: [embed] });
-            }
-
-            // Multiple pages - send with pagination buttons
-            let currentPage = 0;
-
-            const createLyricsEmbed = (pageIndex) => {
-                return new EmbedBuilder()
-                    .setTitle(`🎤 ${lyricsTitle}`)
-                    .setDescription(`**${player.currentTrack.title}**\n${player.currentTrack.artist ? `*by ${player.currentTrack.artist}*\n` : ''}\n${pages[pageIndex]}`)
-                    .setColor(config.bot.embedColor)
-                    .setFooter({ text: `Source: ${lyricsData.source} | Page ${pageIndex + 1}/${pages.length}` })
-                    .setTimestamp();
-            };
-
-            const createPaginationButtons = (pageIndex) => {
-                const prevButton = new ButtonBuilder()
-                    .setCustomId('lyrics_prev')
-                    .setLabel('◀ Previous')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(pageIndex === 0);
-
-                const nextButton = new ButtonBuilder()
-                    .setCustomId('lyrics_next')
-                    .setLabel('Next ▶')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(pageIndex === pages.length - 1);
-                return new ActionRowBuilder().addComponents(prevButton, nextButton);
-            };
-
-            await interaction.editReply({
-                embeds: [createLyricsEmbed(currentPage)],
-                components: [createPaginationButtons(currentPage)]
-            });
-
-            // Fetch the reply message for the collector
-            const message = await interaction.fetchReply();
-
-            // Collector for pagination
-            const collector = message.createMessageComponentCollector({
-                filter: i => i.user.id === interaction.user.id,
-                time: 300000 // 5 minutes
-            });
-
-            collector.on('collect', async i => {
-                try {
-                    // Log to see what's happening
-                    console.log('🔍 Button clicked:', i.customId, 'by', i.user.tag);
-                    console.log('🔍 Current page:', currentPage, 'Total pages:', pages.length);
-
-                    if (i.customId === 'lyrics_prev' && currentPage > 0) {
-                        currentPage--;
-                    } else if (i.customId === 'lyrics_next' && currentPage < pages.length - 1) {
-                        currentPage++;
-                    }
-
-                    console.log('🔍 New page:', currentPage);
-
-                    // Try deferUpdate first, then update
-                    if (!i.deferred && !i.replied) {
-                        await i.deferUpdate();
-                    }
-
-                    await message.edit({
-                        embeds: [createLyricsEmbed(currentPage)],
-                        components: [createPaginationButtons(currentPage)]
-                    });
-
-                } catch (error) {
-                    console.error('❌ Pagination error details:', {
-                        code: error.code,
-                        message: error.message,
-                        deferred: i.deferred,
-                        replied: i.replied
-                    });
-                    
-                    // Ignore interaction timeout/unknown interaction errors
-                    if (error.code === 10062 || error.code === 10008 || error.code === 40060) {
-                        console.log('ℹ️ Interaction expired or unknown, ignoring...');
-                    }
-                }
-            });
-
-            collector.on('end', () => {
-                interaction.editReply({ components: [] }).catch(() => {});
-            });
-
-        } catch (error) {
-            console.error('❌ Lyrics handler error:', error);
-            const errorMsg = await LanguageManager.getTranslation(guildId, 'buttonhandler.lyrics_error') || 'Failed to load lyrics.';
-            if (interaction.deferred) {
-                await interaction.editReply({ content: errorMsg });
-            } else {
-                await interaction.reply({ content: errorMsg, ephemeral: true });
-            }
-        }
-    }
 };

@@ -32,7 +32,7 @@ function buildHelpPayload(client) {
                 name: '▶️ YouTube သီချင်းများ',
                 value: [
                     '`/youtube play query:` — သီချင်းအမည် သို့မဟုတ် YouTube link ဖြင့် တိုက်ရိုက်ဖွင့်ရန်',
-                    '`/youtube search query:` — YouTube ရလဒ် ၉ ခုထဲမှ ကိုယ်ကြိုက်တာရွေးရန်',
+                    '`/youtube search query:` — စာမျက်နှာလိုက် YouTube ရလဒ်များထဲမှ သီချင်းတစ်ပုဒ် သို့မဟုတ် အများအပြားရွေးရန်',
                 ].join('\n'),
                 inline: false,
             },
@@ -51,7 +51,7 @@ function buildHelpPayload(client) {
                 name: '🎛️ Player နှင့် Queue ခလုတ်များ',
                 value: [
                     '**Previous · Pause/Resume · Skip · Stop · Queue**',
-                    '**Shuffle · Volume · Repeat · Autoplay · Lyrics · Favorite**',
+                    '**Shuffle · Volume · Repeat · Autoplay · Favorite**',
                     'Queue ထဲမှာ သီချင်းရွေးပြီး နေရာပြောင်းနိုင်သလို **Clear Queue** နဲ့ queue အားလုံးရှင်းနိုင်ပါတယ်။',
                 ].join('\n'),
                 inline: false,

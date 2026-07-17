@@ -574,20 +574,11 @@ class MusicEmbedManager {
             .setEmoji(autoplayEmoji)
             .setDisabled(disabled);
 
-        // Lyrics button (only show if lyrics available)
-        const lyricsLabel = await LanguageManager.getTranslation(guildId, 'buttons.lyrics') || 'Lyrics';
-        const lyricsButton = new ButtonBuilder()
-            .setCustomId(`music_lyrics:${requesterId}:${sessionId}`)
-            .setLabel(lyricsLabel)
-            .setStyle(ButtonStyle.Secondary)
-            .setEmoji('🎤')
-            .setDisabled(disabled || !player.hasLyrics());
-
         const row = new ActionRowBuilder()
             .addComponents(previousButton, pauseButton, skipButton, stopButton, queueButton);
 
         const row2 = new ActionRowBuilder()
-            .addComponents(shuffleButton, volumeButton, loopButton, autoplayButton, lyricsButton);
+            .addComponents(shuffleButton, volumeButton, loopButton, autoplayButton);
 
         const favoriteButton = new ButtonBuilder()
             .setCustomId(`favorite:current-toggle:${sessionId}`)
