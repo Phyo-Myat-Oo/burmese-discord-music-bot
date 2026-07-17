@@ -14,7 +14,7 @@ The Bot aims to collect the minimum amount of data necessary to provide its musi
 | ------------- | ------- | ------- | --------- |
 | Discord **Guild (Server) ID** | Identifies the server to store language preferences. | Stored locally in `database/languages.json`. | Retained until you request deletion or remove the Bot for 30+ days. |
 | **Language preference** per server | Delivers responses in the preferred language. | Stored locally alongside the server ID. | Retained until you request deletion or remove the Bot. |
-| **Command metadata** (ephemeral) | Processes your `/play`, `/help`, and other commands. | Handled in memory only; not saved after the command completes. | Not retained. |
+| **Command metadata** (ephemeral) | Processes your `/youtube`, `/help`, and other commands. | Handled in memory only; not saved after the command completes. | Not retained. |
 
 The Bot **does not** collect personal messages, media, or any other personal data. Voice channel audio is streamed directly from the requested source and is not recorded or stored.
 

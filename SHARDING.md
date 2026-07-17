@@ -392,7 +392,7 @@ CPU: 3 × 15% = 45% total (during peak)
    Check console for "✅ Shard X is ready!" messages
 
 5. **Test commands**:
-   Run `/play` in a few servers to ensure functionality
+   Run `/youtube play` in a few servers to ensure functionality
 
 ### Rollback to Single-Process
 

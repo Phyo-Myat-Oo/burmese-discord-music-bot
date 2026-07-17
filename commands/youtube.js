@@ -3,18 +3,38 @@ const MusicPlayer = require('../src/MusicPlayer');
 const MusicEmbedManager = require('../src/MusicEmbedManager');
 const LanguageManager = require('../src/LanguageManager');
 const ErrorHandler = require('../src/ErrorHandler');
+const YouTubeSearchCommand = require('../src/YouTubeSearchCommand');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('play')
-        .setDescription('Plays music - Supports YouTube, Spotify, SoundCloud or direct links')
-        .addStringOption(option =>
-            option.setName('query')
-                .setDescription('Song name, artist, YouTube/Spotify/SoundCloud URL or direct link')
-                .setRequired(true)
+        .setName('youtube')
+        .setDescription('Play or search for YouTube music')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('play')
+                .setDescription('Play the first matching song or a supported music link')
+                .addStringOption(option =>
+                    option.setName('query')
+                        .setDescription('Song name, artist, or music URL')
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('search')
+                .setDescription('Search YouTube and choose from nine results')
+                .addStringOption(option =>
+                    option.setName('query')
+                        .setDescription('Song name or artist to search')
+                        .setRequired(true)
+                )
         ),
 
     async execute(interaction, client) {
+        if (interaction.options.getSubcommand() === 'search') {
+            return YouTubeSearchCommand.execute(interaction, client);
+        }
+
         try {
             // Defer reply
             if (!interaction.deferred && !interaction.replied) {

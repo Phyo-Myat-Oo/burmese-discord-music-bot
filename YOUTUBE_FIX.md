@@ -98,7 +98,7 @@ npm start
 
 Then try playing music in Discord:
 ```
-/play Despacito
+/youtube play query:Despacito
 ```
 
 ## If the Problem Persists

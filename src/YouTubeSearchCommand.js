@@ -1,18 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const config = require('../config.js');
-const YouTube = require('../src/YouTube.js');
-const LanguageManager = require('../src/LanguageManager');
+const YouTube = require('./YouTube.js');
+const LanguageManager = require('./LanguageManager');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('search')
-        .setDescription('Search and select music on YouTube')
-        .addStringOption(option =>
-            option.setName('query')
-                .setDescription('Music name or artist to search')
-                .setRequired(true)
-        ),
-
     async execute(interaction) {
         const query = interaction.options.getString('query');
         const guildId = interaction.guild.id;
