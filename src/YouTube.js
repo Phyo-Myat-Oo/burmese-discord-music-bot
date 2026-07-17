@@ -57,52 +57,43 @@ class YouTube {
                 return [];
             }
 
-            const tracks = [];
-            for (const item of results.entries.slice(0, limit)) {
-                try {
-                    // Debug: log item structure
-
-
-                    const unknownTitle = guildId ? await LanguageManager.getTranslation(guildId, 'youtube.unknown_title') : 'Unknown Title';
-                    const unknownArtist = guildId ? await LanguageManager.getTranslation(guildId, 'youtube.unknown_artist') : 'Unknown Artist';
-
-                    const track = {
-                        title: item.title || item.fulltitle || unknownTitle,
-                        artist: item.uploader || item.channel || unknownArtist,
-                        url: item.webpage_url || item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
-                        duration: item.duration || 0,
-                        thumbnail: item.thumbnail,
-                        platform: 'youtube',
-                        type: 'track',
-                        id: item.id,
-                        views: item.view_count,
-                        uploadDate: item.upload_date,
-                        description: item.description,
-                    };
-
-                    // If duration is missing from search, try to get it from getInfo
-                    if (!track.duration || track.duration === 0) {
-
-                        const detailedInfo = await this.getInfo(track.url, guildId);
-                        if (detailedInfo && detailedInfo.duration) {
-                            track.duration = detailedInfo.duration;
-
-                        }
-                    }
-
-                    tracks.push(track);
-                } catch (error) {
-                    continue;
-                }
-            }
-
-
-            return tracks;
+            // Flat search already contains everything needed to render the picker.
+            // Do not fetch every video's full metadata here: nine sequential
+            // getInfo calls made /youtube search unnecessarily slow. Full stream
+            // metadata is resolved only after the listener chooses a result.
+            return await this.buildSearchTracks(results.entries, limit, guildId);
 
         } catch (error) {
             console.error('[YouTube] search() failed:', error.message || error);
             return [];
         }
+    }
+
+    static async buildSearchTracks(entries, limit, guildId = null) {
+        const [unknownTitle, unknownArtist] = guildId
+            ? await Promise.all([
+                LanguageManager.getTranslation(guildId, 'youtube.unknown_title'),
+                LanguageManager.getTranslation(guildId, 'youtube.unknown_artist'),
+            ])
+            : ['Unknown Title', 'Unknown Artist'];
+
+        return (entries || [])
+            .slice(0, limit)
+            .filter(Boolean)
+            .map(item => ({
+                title: item.title || item.fulltitle || unknownTitle,
+                artist: item.uploader || item.channel || unknownArtist,
+                url: item.webpage_url || item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null),
+                duration: item.duration || 0,
+                thumbnail: item.thumbnail || item.thumbnails?.[0]?.url,
+                platform: 'youtube',
+                type: 'track',
+                id: item.id,
+                views: item.view_count,
+                uploadDate: item.upload_date,
+                description: item.description,
+            }))
+            .filter(track => track.url);
     }
 
     static async getInfo(url, guildId = null) {
