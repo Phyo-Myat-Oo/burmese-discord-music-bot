@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const config = require('../config');
 const LanguageManager = require('./LanguageManager');
+const DaisyStateStore = require('./state/DaisyStateStore');
 
 const SPECIAL_GREETING_USER_IDS = new Set([
     '1003981930305441853',
@@ -12,10 +13,13 @@ const SPECIAL_GREETING = [
     '',
     'ဖြိုး။'
 ].join('\n');
+const GREETING_TIME_ZONE = 'Asia/Yangon';
 
 class MusicEmbedManager {
-    constructor(client) {
+    constructor(client, options = {}) {
         this.client = client;
+        this.stateStore = options.stateStore || null;
+        this.now = options.now || (() => new Date());
         // Çakışma önleme için işlem kuyruğu
         this.processingQueue = new Map(); // guildId -> Promise
     }
@@ -96,8 +100,16 @@ class MusicEmbedManager {
     }
 
     async sendSpecialGreeting(interaction, member) {
-        if (!SPECIAL_GREETING_USER_IDS.has(String(member?.id || ''))) return false;
+        const userId = String(member?.id || '');
+        if (!SPECIAL_GREETING_USER_IDS.has(userId)) return false;
         if (!interaction?.followUp) return false;
+
+        const guildId = String(interaction.guildId || interaction.guild?.id || '');
+        if (!guildId) return false;
+
+        const localDate = this.getGreetingLocalDate(this.now());
+        const stateStore = this.getStateStore();
+        if (!stateStore.claimDailyGreeting(guildId, userId, localDate)) return false;
 
         try {
             await interaction.followUp({
@@ -106,9 +118,26 @@ class MusicEmbedManager {
             });
             return true;
         } catch (error) {
+            stateStore.releaseDailyGreeting(guildId, userId, localDate);
             console.error('Could not send the special greeting:', error.message);
             return false;
         }
+    }
+
+    getStateStore() {
+        if (!this.stateStore) this.stateStore = new DaisyStateStore();
+        return this.stateStore;
+    }
+
+    getGreetingLocalDate(date) {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: GREETING_TIME_ZONE,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).formatToParts(date);
+        const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+        return `${values.year}-${values.month}-${values.day}`;
     }
 
     async _processMusic(guildId, trackData, member, interaction) {

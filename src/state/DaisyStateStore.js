@@ -15,6 +15,22 @@ function normalizeOffset(value) {
     return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function requiredIdentifier(value, fieldName) {
+    const normalized = String(value || '').trim();
+    if (!normalized || normalized.length > 64) {
+        throw new TypeError(`${fieldName} must contain between 1 and 64 characters.`);
+    }
+    return normalized;
+}
+
+function requiredLocalDate(value) {
+    const normalized = String(value || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        throw new TypeError('localDate must use YYYY-MM-DD format.');
+    }
+    return normalized;
+}
+
 class DaisyStateStore {
     constructor(databasePath = process.env.STATE_DB_PATH || 'data/daisy_state.db') {
         this.databasePath = path.resolve(databasePath);
@@ -66,6 +82,30 @@ class DaisyStateStore {
                     ON favorites(user_id, created_at DESC, id DESC);
 
                     INSERT INTO state_schema_migrations(version) VALUES (1);
+                `);
+                this.database.exec('COMMIT');
+            } catch (error) {
+                this.database.exec('ROLLBACK');
+                throw error;
+            }
+        }
+
+        if (!applied.has(2)) {
+            this.database.exec('BEGIN IMMEDIATE');
+            try {
+                this.database.exec(`
+                    CREATE TABLE daily_greetings (
+                        guild_id TEXT NOT NULL CHECK(length(guild_id) BETWEEN 1 AND 64),
+                        user_id TEXT NOT NULL CHECK(length(user_id) BETWEEN 1 AND 64),
+                        local_date TEXT NOT NULL CHECK(
+                            length(local_date) = 10
+                            AND local_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                        ),
+                        greeted_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        PRIMARY KEY (guild_id, user_id)
+                    ) STRICT;
+
+                    INSERT INTO state_schema_migrations(version) VALUES (2);
                 `);
                 this.database.exec('COMMIT');
             } catch (error) {
@@ -129,7 +169,35 @@ class DaisyStateStore {
                     id DESC
                 LIMIT $limit
             `),
+            claimDailyGreeting: this.database.prepare(`
+                INSERT INTO daily_greetings (guild_id, user_id, local_date)
+                VALUES (?, ?, ?)
+                ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                    local_date = excluded.local_date,
+                    greeted_at = datetime('now')
+                WHERE daily_greetings.local_date <> excluded.local_date
+            `),
+            releaseDailyGreeting: this.database.prepare(`
+                DELETE FROM daily_greetings
+                WHERE guild_id = ? AND user_id = ? AND local_date = ?
+            `),
         };
+    }
+
+    claimDailyGreeting(guildId, userId, localDate) {
+        return this.statements.claimDailyGreeting.run(
+            requiredIdentifier(guildId, 'guildId'),
+            requiredIdentifier(userId, 'userId'),
+            requiredLocalDate(localDate)
+        ).changes > 0;
+    }
+
+    releaseDailyGreeting(guildId, userId, localDate) {
+        return this.statements.releaseDailyGreeting.run(
+            requiredIdentifier(guildId, 'guildId'),
+            requiredIdentifier(userId, 'userId'),
+            requiredLocalDate(localDate)
+        ).changes > 0;
     }
 
     upsertFavorite(favorite) {

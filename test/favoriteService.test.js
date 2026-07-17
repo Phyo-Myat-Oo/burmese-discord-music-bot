@@ -39,7 +39,7 @@ test('migrates a constrained favorites schema with an indexed user listing', t =
         LIMIT 25
     `).get('user-1');
 
-    assert.deepEqual(versions.map(row => row.version), [1]);
+    assert.deepEqual(versions.map(row => row.version), [1, 2]);
     assert.match(plan.detail, /idx_favorites_user_created/);
     assert.throws(() => store.upsertFavorite({
         userId: 'user-1',
