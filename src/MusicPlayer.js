@@ -752,78 +752,6 @@ class MusicPlayer {
         }
     }
 
-    shouldUseDirectYouTubeStream(track, resumeFromMs = 0) {
-        return track?.platform === 'youtube' && Math.max(0, Number(resumeFromMs) || 0) === 0;
-    }
-
-    async fetchDirectAudioStream(streamUrl, streamInfo = {}) {
-        if (streamInfo?.stream && typeof streamInfo.stream.pipe === 'function') {
-            return streamInfo.stream;
-        }
-
-        if (typeof streamUrl !== 'string' || !streamUrl) {
-            throw new Error('YouTube did not provide a usable direct audio URL');
-        }
-
-        const fetch = await ensureFetch();
-        const response = await fetch(streamUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                ...(streamInfo?.httpHeaders || {})
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch YouTube stream: HTTP ${response.status}`);
-        }
-
-        const audioStream = typeof response.body?.getReader === 'function' && typeof Readable.fromWeb === 'function'
-            ? Readable.fromWeb(response.body)
-            : response.body;
-
-        if (!audioStream || typeof audioStream.pipe !== 'function') {
-            throw new Error('YouTube returned an unreadable audio stream');
-        }
-
-        return audioStream;
-    }
-
-    createDirectAudioResource(audioStream, streamInfo = {}) {
-        const ffmpegProcess = new prism.FFmpeg({
-            command: ffmpegPath,
-            args: [
-                '-analyzeduration', '0',
-                '-loglevel', '0',
-                '-i', 'pipe:0',
-                '-f', 's16le',
-                '-ar', '48000',
-                '-ac', '2'
-            ]
-        });
-
-        ffmpegProcess.on('error', error => {
-            if (error.message?.includes('Premature close')) return;
-            console.error('YouTube FFmpeg streaming error:', error.message);
-        });
-
-        audioStream.on('error', error => {
-            console.error('YouTube direct stream error:', error.message);
-            if (!ffmpegProcess.destroyed) ffmpegProcess.destroy(error);
-        });
-        audioStream.pipe(ffmpegProcess);
-
-        return createAudioResource(ffmpegProcess, {
-            inputType: StreamType.Raw,
-            inlineVolume: true,
-            metadata: {
-                title: this.currentTrack.title,
-                url: this.currentTrack.url,
-                duration: streamInfo.duration || this.currentTrack.duration,
-                bitrate: streamInfo.bitrate || 128
-            }
-        });
-    }
-
     async play(trackIndex = null, seekMs = 0) {
         try {
             // If no current track, get from queue
@@ -995,51 +923,10 @@ class MusicPlayer {
                 }
             }
 
-            const useDirectYouTubeStream = this.shouldUseDirectYouTubeStream(
-                this.currentTrack,
-                resumeFromMs
-            );
-
-            if (useDirectYouTubeStream) {
-                let backgroundDownload = null;
-
-                // Preserve MusicBot's low-latency path: begin playback from the
-                // fresh media URL while yt-dlp builds a verified local fallback.
-                if (shouldDownload) {
-                    const trackToDownload = this.currentTrack;
-                    backgroundDownload = this.downloadTrack(
-                        trackToDownload,
-                        streamUrl_final,
-                        streamInfo
-                    ).then(file => {
-                        if (this.currentTrack?.url === trackToDownload.url) {
-                            this.currentDownloadedFile = file;
-                        }
-                        return file;
-                    }).catch(error => {
-                        console.warn(`YouTube background cache failed: ${error.message}`);
-                        return null;
-                    });
-                }
-
-                try {
-                    const audioStream = await this.fetchDirectAudioStream(streamUrl_final, streamInfo);
-                    this.resource = this.createDirectAudioResource(audioStream, streamInfo);
-                    console.log(`Playing YouTube direct stream: ${this.currentTrack.title}`);
-                } catch (directError) {
-                    console.warn(`YouTube direct stream unavailable; using local cache: ${directError.message}`);
-
-                    if (!downloadedFile && backgroundDownload) {
-                        downloadedFile = await backgroundDownload;
-                    }
-                    if (!downloadedFile) throw directError;
-
-                    this.currentDownloadedFile = downloadedFile;
-                    shouldDownload = false;
-                }
-            } else if (shouldDownload) {
-                // Phyu/direct sources remain cache-first. YouTube recovery and
-                // resume also use the local file produced in the background.
+            // Finish and verify the local Opus file before playback. YouTube
+            // startup takes longer on a cache miss, but playback no longer
+            // depends on a long-lived remote HTTPS stream.
+            if (shouldDownload) {
                 downloadedFile = await this.downloadTrack(
                     this.currentTrack,
                     streamUrl_final,
@@ -1049,7 +936,7 @@ class MusicPlayer {
                 shouldDownload = false;
             }
             
-            // File playback mode (either pre-downloaded or fallback from streaming)
+            // Playback always uses the verified local cache file.
             if (!this.resource && !shouldDownload && downloadedFile) {
                 console.log(`🎵 Playing from cached file: ${path.basename(downloadedFile)} (seek: ${resumeFromMs}ms)`);
                 
