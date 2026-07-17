@@ -20,6 +20,7 @@ const PlayerStateManager = require('./PlayerStateManager');
 const LyricsManager = require('./LyricsManager');
 const prism = require('prism-media');
 const ffmpegPath = require('./FFmpeg');
+const { spawn } = require('child_process');
 const { promisify } = require('util');
 const chalk = require('chalk');
 const { pipeline, Readable } = require('stream');
@@ -49,6 +50,54 @@ async function ensureFetch() {
         cachedFetch = mod.default;
     }
     return cachedFetch;
+}
+
+async function transcodeStreamToOpusFile(audioStream, filepath) {
+    const temporaryPath = `${filepath}.${process.pid}.${Date.now()}.part`;
+    let stderr = '';
+
+    const ffmpegProcess = spawn(ffmpegPath, [
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-vn',
+        '-c:a', 'libopus',
+        '-f', 'opus',
+        '-ar', '48000',
+        '-ac', '2',
+        '-b:a', '128k',
+        '-y',
+        temporaryPath,
+    ], {
+        windowsHide: true,
+        stdio: ['pipe', 'ignore', 'pipe'],
+    });
+
+    ffmpegProcess.stderr.on('data', chunk => {
+        if (stderr.length < 8_000) stderr += chunk.toString();
+    });
+
+    try {
+        const [pipeError, exit] = await Promise.all([
+            pipelineAsync(audioStream, ffmpegProcess.stdin).then(() => null, error => error),
+            new Promise((resolve, reject) => {
+                ffmpegProcess.once('error', reject);
+                ffmpegProcess.once('close', (code, signal) => resolve({ code, signal }));
+            }),
+        ]);
+
+        if (exit.code !== 0) {
+            const details = stderr.trim() || `signal ${exit.signal || 'unknown'}`;
+            throw new Error(`FFmpeg cache transcode exited with code ${exit.code}: ${details}`);
+        }
+        if (pipeError) throw pipeError;
+
+        await fs.rename(temporaryPath, filepath);
+    } catch (error) {
+        if (!ffmpegProcess.killed) ffmpegProcess.kill('SIGKILL');
+        await fs.unlink(temporaryPath).catch(() => {});
+        throw error;
+    }
 }
 
 class MusicPlayer {
@@ -645,29 +694,9 @@ class MusicPlayer {
                     audioStream = response.body;
                 }
 
-                // Transcode to opus
-                const ffmpegProcess = new prism.FFmpeg({
-                    command: ffmpegPath,
-                    args: [
-                        '-i', 'pipe:0',
-                        '-f', 'opus',
-                        '-ar', '48000',
-                        '-ac', '2',
-                        '-b:a', '128k',
-                        '-y',
-                        filepath
-                    ]
-                });
-
-                audioStream.pipe(ffmpegProcess);
-
-                await new Promise((resolve, reject) => {
-                    ffmpegProcess.on('close', (code) => {
-                        if (code === 0) resolve();
-                        else reject(new Error(`FFmpeg exited with code ${code}`));
-                    });
-                    ffmpegProcess.on('error', reject);
-                });
+                // prism.FFmpeg always appends a pipe output, so use a regular
+                // child process when the desired output is a cache file.
+                await transcodeStreamToOpusFile(audioStream, filepath);
             }
 
             // Verify file
