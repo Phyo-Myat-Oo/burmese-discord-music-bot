@@ -54,3 +54,11 @@ test('rolling cache removes the oldest files after ten tracks', async t => {
     assert.equal(fs.existsSync(files[1]), false);
     assert.equal(fs.existsSync(files[11]), true);
 });
+
+test('uses direct streaming only for fresh YouTube playback', () => {
+    const player = Object.create(MusicPlayer.prototype);
+
+    assert.equal(player.shouldUseDirectYouTubeStream({ platform: 'youtube' }, 0), true);
+    assert.equal(player.shouldUseDirectYouTubeStream({ platform: 'youtube' }, 12_000), false);
+    assert.equal(player.shouldUseDirectYouTubeStream({ platform: 'phyu' }, 0), false);
+});
