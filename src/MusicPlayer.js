@@ -36,6 +36,7 @@ const CACHE_DIR = path.join(__dirname, '..', 'audio_cache');
 const PRELOAD_AHEAD_COUNT = 5;
 const PHYU_PRELOAD_AHEAD_COUNT = 1;
 const MAX_CACHED_TRACKS = 10;
+const DISCORD_OPUS_BITRATE = 96_000;
 
 // Ensure cache directory exists
 if (!fsSync.existsSync(CACHE_DIR)) {
@@ -752,6 +753,12 @@ class MusicPlayer {
         }
     }
 
+    configureDiscordOpusBitrate(resource) {
+        if (typeof resource?.encoder?.setBitrate !== 'function') return false;
+        resource.encoder.setBitrate(DISCORD_OPUS_BITRATE);
+        return true;
+    }
+
     async play(trackIndex = null, seekMs = 0) {
         try {
             // If no current track, get from queue
@@ -972,6 +979,7 @@ class MusicPlayer {
                         bitrate: (streamInfo && streamInfo.bitrate) || 128
                     }
                 });
+                this.configureDiscordOpusBitrate(this.resource);
             }
 
             // Ensure we have a resource

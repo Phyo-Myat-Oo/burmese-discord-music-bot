@@ -66,6 +66,20 @@ test('keeps non-Phyu preloading while limiting Phyu traffic', () => {
     );
 });
 
+test('sets only the final Discord Opus encoder to 96 kbps', () => {
+    const player = Object.create(MusicPlayer.prototype);
+    const configuredBitrates = [];
+    const resource = {
+        encoder: {
+            setBitrate: bitrate => configuredBitrates.push(bitrate),
+        },
+    };
+
+    assert.equal(player.configureDiscordOpusBitrate(resource), true);
+    assert.deepEqual(configuredBitrates, [96_000]);
+    assert.equal(player.configureDiscordOpusBitrate({}), false);
+});
+
 test('rolling cache removes the oldest files after ten tracks', async t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'daisy-cache-test-'));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
