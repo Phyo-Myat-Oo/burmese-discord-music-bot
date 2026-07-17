@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const PhyuCatalog = require('../src/catalog/PhyuCatalog');
+const PhyuAutocomplete = require('../src/catalog/PhyuAutocomplete');
 const { getPhyuBrowser } = require('../src/catalog/PhyuBrowser');
 const {
     toMusicTrack,
@@ -8,6 +9,8 @@ const {
 } = require('../src/catalog/PhyuPlayback');
 
 let catalogue;
+const autocompleteSearch = new PhyuAutocomplete();
+
 function getCatalogue() {
     if (!catalogue) catalogue = new PhyuCatalog();
     return catalogue;
@@ -95,7 +98,7 @@ module.exports = {
         const focused = interaction.options.getFocused().trim();
         if (!focused) return interaction.respond([]);
 
-        const items = getCatalogue().searchItems(focused, { limit: 25 });
+        const items = await autocompleteSearch.search(focused, { limit: 25 });
         return interaction.respond(items.map(item => ({
             name: autocompleteLabel(item),
             value: `phyu:${item.type}:${item.id}`,
@@ -103,7 +106,18 @@ module.exports = {
     },
 
     async execute(interaction, client) {
-        if (!interaction.deferred && !interaction.replied) await interaction.deferReply();
+        if (!interaction.deferred && !interaction.replied) {
+            try {
+                await interaction.deferReply();
+            } catch (error) {
+                if (error?.code === 10062 || error?.code === 40060) {
+                    const age = Date.now() - interaction.createdTimestamp;
+                    console.warn(`[PhyuCatalog] Interaction expired before acknowledgement (${age}ms old).`);
+                    return;
+                }
+                throw error;
+            }
+        }
 
         try {
             const subcommand = interaction.options.getSubcommand();

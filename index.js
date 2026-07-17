@@ -278,10 +278,21 @@ setTimeout(() => {
 
             const errorMessage = '❌ An error occurred while executing this command!';
 
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: errorMessage, ephemeral: true });
-            } else {
-                await interaction.reply({ content: errorMessage, ephemeral: true });
+            try {
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp({ content: errorMessage, flags: 1 << 6 });
+                } else {
+                    await interaction.reply({ content: errorMessage, flags: 1 << 6 });
+                }
+            } catch (responseError) {
+                if (responseError?.code === 10062 || responseError?.code === 40060) {
+                    const age = Date.now() - interaction.createdTimestamp;
+                    console.warn(chalk.yellow(
+                        `Discord interaction ${interaction.id} was already expired or acknowledged (${age}ms old).`
+                    ));
+                    return;
+                }
+                throw responseError;
             }
         }
     });

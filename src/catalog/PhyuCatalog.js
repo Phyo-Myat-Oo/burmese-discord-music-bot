@@ -79,16 +79,7 @@ const SEARCH_ITEMS_SELECT = `
             'track' AS item_type,
             t.id,
             t.display_title AS title,
-            COALESCE((
-                SELECT group_concat(artist_name, ' / ')
-                FROM (
-                    SELECT ar.name AS artist_name
-                    FROM track_artists ta
-                    JOIN artists ar ON ar.id = ta.artist_id
-                    WHERE ta.track_id = t.id
-                    ORDER BY ta.position, ar.id
-                )
-            ), t.artist_text, '') AS artist,
+            COALESCE(NULLIF(trim(t.artist_text), ''), group_concat(DISTINCT ar.name), '') AS artist,
             a.display_title AS album,
             p.cover_url,
             1 AS track_count,
@@ -102,15 +93,13 @@ const SEARCH_ITEMS_SELECT = `
         FROM tracks t
         JOIN albums a ON a.id = t.album_id
         JOIN posts p ON p.url = a.post_url
+        LEFT JOIN track_artists ta ON ta.track_id = t.id
+        LEFT JOIN artists ar ON ar.id = ta.artist_id
         WHERE
             t.search_key LIKE $pattern
             OR a.search_key LIKE $pattern
-            OR EXISTS (
-                SELECT 1
-                FROM track_artists ta
-                JOIN artists ar ON ar.id = ta.artist_id
-                WHERE ta.track_id = t.id AND ar.search_key LIKE $pattern
-            )
+            OR ar.search_key LIKE $pattern
+        GROUP BY t.id
 
         UNION ALL
 
@@ -118,16 +107,7 @@ const SEARCH_ITEMS_SELECT = `
             'album' AS item_type,
             a.id,
             a.display_title AS title,
-            COALESCE((
-                SELECT group_concat(artist_name, ' / ')
-                FROM (
-                    SELECT ar.name AS artist_name
-                    FROM album_artists aa
-                    JOIN artists ar ON ar.id = aa.artist_id
-                    WHERE aa.album_id = a.id
-                    ORDER BY aa.position, ar.id
-                )
-            ), '') AS artist,
+            COALESCE(group_concat(DISTINCT ar.name), '') AS artist,
             NULL AS album,
             p.cover_url,
             (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id) AS track_count,
@@ -138,14 +118,12 @@ const SEARCH_ITEMS_SELECT = `
             END AS match_rank
         FROM albums a
         JOIN posts p ON p.url = a.post_url
+        LEFT JOIN album_artists aa ON aa.album_id = a.id
+        LEFT JOIN artists ar ON ar.id = aa.artist_id
         WHERE
             a.search_key LIKE $pattern
-            OR EXISTS (
-                SELECT 1
-                FROM album_artists aa
-                JOIN artists ar ON ar.id = aa.artist_id
-                WHERE aa.album_id = a.id AND ar.search_key LIKE $pattern
-            )
+            OR ar.search_key LIKE $pattern
+        GROUP BY a.id
     )
     ORDER BY match_rank, title, item_type, id
     LIMIT $limit OFFSET $offset
