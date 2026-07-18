@@ -26,7 +26,9 @@ catalogue and user experience for Daisy.
 - Reorder queued tracks, clear upcoming songs, and return to the Now Playing card.
 - Download and convert audio into a local Opus cache before playback.
 - Preload upcoming tracks and retain at most ten cached files.
+- Continue automatically with YouTube genre radio or random playable Phyu tracks.
 - Restore active playback state after a safe restart.
+- Update new/edited Blogspot posts and missing MediaFire identifiers incrementally.
 - Display `/help` in Burmese.
 
 ## Commands
@@ -46,6 +48,23 @@ catalogue and user experience for Daisy.
 
 You must be inside a voice channel before starting playback. The bot must be able
 to view, connect to, and speak in that channel.
+
+## Playback controls and autoplay
+
+Everyone listening in Daisy's active voice channel can use the playback buttons.
+The Now Playing card provides Previous, Pause/Resume, Skip, Stop, Queue,
+Shuffle, Volume, Repeat, Autoplay, and Favorite controls. The Queue view supports
+pagination, reordering, and clearing upcoming tracks without stopping the
+current song.
+
+Autoplay starts when the current queue becomes empty:
+
+- **Pop, Rock, R&B, K-pop, Random, and other genres** search and play YouTube.
+- **Phyu Random Catalogue** chooses a playable indexed Phyu track and uses
+  pCloud with MediaFire fallback.
+- Enabling autoplay after playback has already ended starts it immediately.
+- YouTube autoplay requires working YouTube extraction and cookies when the VPS
+  is challenged by YouTube.
 
 ## Requirements
 

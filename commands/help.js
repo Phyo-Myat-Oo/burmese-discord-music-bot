@@ -53,6 +53,16 @@ function buildHelpPayload(client) {
                     '**Previous · Pause/Resume · Skip · Stop · Queue**',
                     '**Shuffle · Volume · Repeat · Autoplay · Favorite**',
                     'Queue ထဲမှာ သီချင်းရွေးပြီး နေရာပြောင်းနိုင်သလို **Clear Queue** နဲ့ queue အားလုံးရှင်းနိုင်ပါတယ်။',
+                    'Bot ရှိနေတဲ့ voice channel ထဲက နားထောင်သူတိုင်း playback ခလုတ်တွေကို အသုံးပြုနိုင်ပါတယ်။',
+                ].join('\n'),
+                inline: false,
+            },
+            {
+                name: '🎲 Autoplay အသုံးပြုနည်း',
+                value: [
+                    '**Pop · Rock · R&B · K-pop · Random** စတဲ့ genre များက YouTube မှ သီချင်းရှာပြီး ဆက်ဖွင့်ပေးပါတယ်။',
+                    '**Phyu Random Catalogue** က Phyu catalogue ထဲမှ ရနိုင်တဲ့သီချင်းကို ကျပန်းရွေးပြီး pCloud သို့မဟုတ် MediaFire ဖြင့်ဖွင့်ပါတယ်။',
+                    'Queue လွတ်သွားချိန်မှာ autoplay စတင်ပြီး၊ queue ပြီးသွားမှရွေးထားလျှင်လည်း ချက်ချင်းစတင်ပါတယ်။',
                 ].join('\n'),
                 inline: false,
             },

@@ -32,5 +32,15 @@ test('lists every current public command in Burmese help', () => {
     assert.match(text, /\/favorites remove/);
     assert.match(text, /\/nowplaying/);
     assert.match(text, /\/help/);
+    assert.match(text, /Phyu Random Catalogue/);
+    assert.match(text, /YouTube/);
+    assert.match(text, /နားထောင်သူတိုင်း/);
+    assert.ok(json.description.length <= 4096);
+    assert.ok(json.fields.every(field => field.name.length <= 256 && field.value.length <= 1024));
+    const embedCharacters = json.title.length
+        + json.description.length
+        + json.fields.reduce((total, field) => total + field.name.length + field.value.length, 0)
+        + (json.footer?.text?.length || 0);
+    assert.ok(embedCharacters <= 6000);
     assert.equal(payload.components[0].components[0].data.custom_id, 'help_refresh');
 });
