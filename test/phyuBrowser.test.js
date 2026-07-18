@@ -46,13 +46,13 @@ test('paginates a 96-track album within Discord select-menu limits', async t => 
 
     const session = browser.createSession('user-2');
     const firstPage = await browser.renderAlbum(session.id, 1584, 0);
-    const lastPage = await browser.renderAlbum(session.id, 1584, 3);
+    const lastPage = await browser.renderAlbum(session.id, 1584, 4);
     const firstOptions = firstPage.components[0].toJSON().components[0].options;
     const lastOptions = lastPage.components[0].toJSON().components[0].options;
 
-    assert.equal(firstOptions.length, 25);
-    assert.equal(lastOptions.length, 21);
-    assert.match(lastPage.embeds[0].data.footer.text, /4\/4/);
+    assert.equal(firstOptions.length, 20);
+    assert.equal(lastOptions.length, 16);
+    assert.match(lastPage.embeds[0].data.footer.text, /5\/5/);
 });
 
 test('renders paginated track search results with a direct-play selector', async t => {

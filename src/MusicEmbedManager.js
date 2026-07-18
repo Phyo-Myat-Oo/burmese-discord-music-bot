@@ -5,7 +5,6 @@ const DaisyStateStore = require('./state/DaisyStateStore');
 
 const SPECIAL_GREETING_USER_IDS = new Set([
     '1003981930305441853',
-    '864008629401157684', // Temporary test account
 ]);
 const SPECIAL_GREETING = [
     'Hello , ငါရဲ့ ဒေစီလေး ရေ ဒီနေ့ ရောက်လာပေးလို့ ကျေးဇူးအများကြီး တင်ပါတယ် ။',
@@ -388,8 +387,8 @@ class MusicEmbedManager {
         // Permission info and Queue info in footer
         const footerParts = [];
         
-        // Add permission info
-        const permissionInfo = await LanguageManager.getTranslation(guildId, 'musicmanager.control_permission_info');
+        // Playback controls are shared by everyone listening in the active voice channel.
+        const permissionInfo = '🔓 Controls: Everyone in the active voice channel can control playback';
         footerParts.push(permissionInfo);
         
         // Add queue info if available

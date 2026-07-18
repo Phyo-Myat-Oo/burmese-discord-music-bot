@@ -35,9 +35,9 @@ test('sends the personal greeting only to the configured Discord user', async ()
     });
 
     assert.equal(sent, true);
-    assert.equal(testAccountSent, true);
+    assert.equal(testAccountSent, false);
     assert.equal(ignored, false);
-    assert.equal(messages.length, 2);
+    assert.equal(messages.length, 1);
     assert.equal(messages[0].flags, MessageFlags.Ephemeral);
     assert.match(messages[0].content, /ငါရဲ့ ဒေစီလေး/);
     assert.match(messages[0].content, /ဖြိုး။$/);

@@ -9,7 +9,7 @@ const {
 const config = require('../../config');
 const { getPhyuCatalogClient } = require('./PhyuAutocomplete');
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 const SESSION_TTL_MS = 15 * 60 * 1000;
 
 function truncate(value, maxLength) {

@@ -125,7 +125,7 @@ test('keeps the paginated search picker as the advanced flow', async () => {
 
     assert.equal(reply.components.length, 2);
     const select = reply.components[0].toJSON().components[0];
-    assert.equal(select.options.length, 25);
+    assert.equal(select.options.length, 20);
     assert.match(select.custom_id, /^phyu:search-item-select:/);
     assert.ok(select.options.some(option => option.label.startsWith('[Track]')));
     assert.ok(select.options.some(option => option.label.startsWith('[Album]')));

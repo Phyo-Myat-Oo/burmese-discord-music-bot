@@ -141,20 +141,10 @@ module.exports = {
         }
     },
 
-    // Authorization control function
-    isAuthorized(interaction, requesterId) {
-        const member = interaction.member;
-
-        // ManageGuild permission check (Sunucuyu Yönet)
-        if (member.permissions.has('ManageGuild')) return true;
-
-        // DJ role check (if exists)
-        if (member.roles.cache.some(role => role.name.toLowerCase().includes('dj'))) return true;
-
-        // Music starter check
-        if (member.id === requesterId) return true;
-
-        return false;
+    // Anyone listening in the bot's active voice channel may use playback controls.
+    // The shared interaction guard above enforces the same-channel requirement.
+    isAuthorized() {
+        return true;
     },
 
     async handlePause(interaction, player, requesterId) {
