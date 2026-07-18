@@ -99,6 +99,12 @@ module.exports = {
 
         await interaction.reply({ embeds: [embed], flags: [1 << 6] });
 
+        // If autoplay is enabled after the queue has already ended, start it
+        // immediately instead of waiting for a track-end event that already ran.
+        if (!player.currentTrack && player.queue?.length === 0 && typeof player.handleAutoplay === 'function') {
+            await player.handleAutoplay();
+        }
+
         // Update the main embed to show autoplay is enabled
         if (client.musicEmbedManager) {
             await client.musicEmbedManager.updateNowPlayingEmbed(player);

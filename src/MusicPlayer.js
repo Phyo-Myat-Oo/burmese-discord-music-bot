@@ -1655,25 +1655,29 @@ class MusicPlayer {
                 random: ['music official video', 'top songs 2024', 'music video official', 'best music']
             };
 
-            const keywords = genreKeywords[this.autoplay] || genreKeywords.random;
-            const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
+            const keywords = [...(genreKeywords[this.autoplay] || genreKeywords.random)];
 
-            // Search YouTube for random track
+            // Flat yt-dlp search results do not always include duration. A missing
+            // duration is not proof that the video is unplayable; getStream()
+            // resolves the full metadata after a candidate is selected.
             const YouTube = require('./YouTube');
+            const currentIdentity = this.currentTrack?.id || this.currentTrack?.url || null;
+            const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
             const results = await YouTube.search(randomKeyword, 15, this.guild.id);
 
             if (!results || results.length === 0) {
-                return;
+                throw new Error(`YouTube returned no ${this.autoplay} autoplay search results.`);
             }
 
             // Filter out non-music content
             const filteredResults = results.filter(track => {
-                // Skip if duration is missing
-                if (!track.duration) return false;
-                
                 // Duration limits: 30 seconds to 10 minutes (600 seconds)
-                // This filters out most tutorials, lessons, podcasts, and full movies
-                if (track.duration < 30 || track.duration > 600) return false;
+                // Apply this only when flat search supplied a duration.
+                const duration = Number(track.duration) || 0;
+                if (duration > 0 && (duration < 30 || duration > 600)) return false;
+
+                const identity = track.id || track.url;
+                if (currentIdentity && identity === currentIdentity) return false;
                 
                 // Filter out common non-music keywords in title
                 const title = (track.title || '').toLowerCase();
@@ -1703,12 +1707,13 @@ class MusicPlayer {
                 // Try again with a different keyword
                 const fallbackKeyword = keywords[Math.floor(Math.random() * keywords.length)];
                 const fallbackResults = await YouTube.search(fallbackKeyword, 10, this.guild.id);
-                const fallbackFiltered = (fallbackResults || []).filter(track => 
-                    track.duration >= 30 && track.duration <= 600
-                );
+                const fallbackFiltered = (fallbackResults || []).filter(track => {
+                    const duration = Number(track.duration) || 0;
+                    return track?.url && (duration === 0 || (duration >= 30 && duration <= 600));
+                });
                 
                 if (fallbackFiltered.length === 0) {
-                    return;
+                    throw new Error(`YouTube returned no playable ${this.autoplay} autoplay results.`);
                 }
                 
                 filteredResults.push(...fallbackFiltered);

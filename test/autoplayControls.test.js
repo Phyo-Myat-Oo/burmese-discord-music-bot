@@ -4,6 +4,7 @@ const buttonHandler = require('../events/buttonHandler');
 const modalHandler = require('../events/modalHandler');
 const MusicPlayer = require('../src/MusicPlayer');
 const PhyuAutocomplete = require('../src/catalog/PhyuAutocomplete');
+const YouTube = require('../src/YouTube');
 
 test('leaves autoplay genre selections to the autoplay interaction handler', async () => {
     let replies = 0;
@@ -50,6 +51,34 @@ test('enables the selected autoplay genre and refreshes now playing', async () =
     assert.equal(refreshed, true);
     assert.equal(reply.flags[0], 1 << 6);
     assert.match(reply.embeds[0].data.description, /Phyu Random Catalogue/);
+});
+
+test('starts autoplay immediately when the player is already idle', async () => {
+    let autoplayCalls = 0;
+    const player = {
+        autoplay: false,
+        currentTrack: null,
+        queue: [],
+        voiceChannel: { id: 'voice-1' },
+        handleAutoplay: async () => { autoplayCalls += 1; },
+    };
+    const interaction = {
+        guild: { id: 'guild-1' },
+        member: {
+            voice: { channel: { id: 'voice-1' } },
+            toString: () => '<@listener-1>',
+        },
+        values: ['pop'],
+        reply: async () => {},
+    };
+
+    await modalHandler.handleAutoplayGenre(interaction, {
+        players: new Map([['guild-1', player]]),
+        musicEmbedManager: { updateNowPlayingEmbed: async () => {} },
+    });
+
+    assert.equal(player.autoplay, 'pop');
+    assert.equal(autoplayCalls, 1);
 });
 
 test('offers Phyu random mode in the autoplay picker', async () => {
@@ -131,6 +160,30 @@ test('starts another indexed Phyu track when random catalogue autoplay is active
     assert.equal(preloadAttempts, 2);
     assert.equal(player.currentTrack.id, 'phyu:track:43');
     assert.equal(player.currentTrack.extra.catalogue.pcloudFileId, '725200524028587006');
+});
+
+test('accepts a YouTube autoplay result whose flat search omitted duration', async t => {
+    const originalSearch = YouTube.search;
+    t.after(() => { YouTube.search = originalSearch; });
+    YouTube.search = async () => [{
+        id: 'youtube-1',
+        title: 'Official pop song',
+        duration: 0,
+        url: 'https://www.youtube.com/watch?v=youtube-1',
+        platform: 'youtube',
+    }];
+
+    let selectedTrack = null;
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'pop',
+        currentTrack: { id: 'finished-track' },
+        guild: { id: 'guild-1' },
+        startAutoplayTrack: async track => { selectedTrack = track; },
+    });
+
+    await player.handleAutoplay();
+
+    assert.equal(selectedTrack?.id, 'youtube-1');
 });
 
 test('returns to autoplay when the last queued source fails', async () => {
