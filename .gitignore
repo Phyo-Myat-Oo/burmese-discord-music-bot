@@ -3,6 +3,8 @@ cookies.txt
 
 node_modules/
 audio_cache/
+data/daisy_v2/backups/
+*.update.lock
 dist/
 build/
 logs/

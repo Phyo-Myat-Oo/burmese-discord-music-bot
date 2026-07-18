@@ -1,0 +1,19 @@
+[Unit]
+Description=Daisy incremental Phyu catalogue update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/daisy-musicbot
+EnvironmentFile=-/root/daisy-musicbot/.env
+ExecStart=/usr/bin/node scripts/update-catalogue.js --recent-posts=200 --backfill-posts=50 --backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

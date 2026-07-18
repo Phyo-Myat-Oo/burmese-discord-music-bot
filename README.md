@@ -130,6 +130,50 @@ data/daisy_v2/catalog.db
 Do not crawl the entire Phyu Ni War Pyar site again unless this database is
 missing or intentionally reset. Future indexing should be incremental.
 
+### Incremental catalogue updates
+
+The updater reads the newest/edited Blogspot feed entries, keeps existing album
+and track IDs stable, fetches current pCloud folder metadata, and fills missing
+MediaFire quick keys in bounded batches. It never stores temporary pCloud
+download URLs.
+
+Preview an update without changing the database:
+
+```bash
+npm run catalogue:update -- --dry-run --recent-posts=20 --backfill-posts=5
+```
+
+Run a normal update and create a backup first:
+
+```bash
+npm run catalogue:update -- --recent-posts=200 --backfill-posts=50 --backup
+```
+
+Backups are written under `data/daisy_v2/backups/`; only the newest three are
+retained. A lock file prevents overlapping updates. The command returns exit
+code `2` when individual posts failed, so the successful updates are preserved
+while systemd records the partial failure.
+
+To schedule it every six hours on the VPS without restarting the music bot:
+
+```bash
+sudo cp deploy/systemd/daisy-catalogue-update.service /etc/systemd/system/
+sudo cp deploy/systemd/daisy-catalogue-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now daisy-catalogue-update.timer
+systemctl list-timers daisy-catalogue-update.timer
+```
+
+Run it immediately or inspect its log:
+
+```bash
+sudo systemctl start daisy-catalogue-update.service
+journalctl -u daisy-catalogue-update.service -n 100 --no-pager
+```
+
+The timer unit assumes the repository is at `/root/daisy-musicbot`. Adjust its
+`WorkingDirectory`, `EnvironmentFile`, and `ExecStart` if your path differs.
+
 Daisy keeps writable personal and playback state separately:
 
 ```text

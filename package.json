@@ -9,6 +9,7 @@
     "shard": "node shard.js",
     "check": "node --check index.js",
     "test": "node --test",
+    "catalogue:update": "node scripts/update-catalogue.js",
     "postinstall": "node scripts/update-ytdlp.js"
   },
   "keywords": [
