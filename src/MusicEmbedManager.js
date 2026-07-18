@@ -608,12 +608,6 @@ class MusicEmbedManager {
             .setEmoji(autoplayEmoji)
             .setDisabled(disabled);
 
-        const row = new ActionRowBuilder()
-            .addComponents(previousButton, pauseButton, skipButton, stopButton, queueButton);
-
-        const row2 = new ActionRowBuilder()
-            .addComponents(shuffleButton, volumeButton, loopButton, autoplayButton);
-
         const favoriteButton = new ButtonBuilder()
             .setCustomId(`favorite:current-toggle:${sessionId}`)
             .setLabel('Favorite')
@@ -621,10 +615,17 @@ class MusicEmbedManager {
             .setEmoji('⭐')
             .setDisabled(disabled || !player.currentTrack);
 
-        const row3 = new ActionRowBuilder()
-            .addComponents(favoriteButton);
+        // Keep related controls on predictable rows, including on narrow Discord clients.
+        const transportRow = new ActionRowBuilder()
+            .addComponents(previousButton, pauseButton, skipButton);
+        const sessionRow = new ActionRowBuilder()
+            .addComponents(stopButton, queueButton);
+        const playbackModeRow = new ActionRowBuilder()
+            .addComponents(shuffleButton, loopButton, autoplayButton);
+        const personalRow = new ActionRowBuilder()
+            .addComponents(volumeButton, favoriteButton);
 
-        return [row, row2, row3];
+        return [transportRow, sessionRow, playbackModeRow, personalRow];
     }
 
     /**

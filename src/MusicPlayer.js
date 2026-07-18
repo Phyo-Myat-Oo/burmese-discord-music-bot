@@ -1596,6 +1596,29 @@ class MusicPlayer {
         if (!this.autoplay || typeof this.autoplay !== 'string') return;
 
         try {
+            if (this.autoplay === 'phyu_random') {
+                const { getPhyuCatalogClient } = require('./catalog/PhyuAutocomplete');
+                const { toMusicTrack } = require('./catalog/PhyuPlayback');
+                const catalogue = getPhyuCatalogClient();
+                const currentIdentity = this.currentTrack?.id || this.currentTrack?.url || null;
+                let catalogueTrack = null;
+
+                // Avoid immediately replaying the same catalogue track when possible.
+                for (let attempt = 0; attempt < 5; attempt += 1) {
+                    const candidate = await catalogue.getRandomTrack();
+                    if (!candidate) break;
+                    catalogueTrack = candidate;
+                    if (candidate.stableKey !== currentIdentity) break;
+                }
+
+                if (!catalogueTrack) {
+                    throw new Error('The Phyu catalogue has no playable tracks.');
+                }
+
+                await this.startAutoplayTrack(toMusicTrack(catalogueTrack));
+                return;
+            }
+
             // Genre-specific search keywords
             const genreKeywords = {
                 pop: ['pop music 2024', 'top pop songs', 'pop hits official', 'best pop music'],
@@ -1681,31 +1704,29 @@ class MusicPlayer {
 
             // Pick random track from filtered results
             const randomTrack = filteredResults[Math.floor(Math.random() * filteredResults.length)];
-            randomTrack.requestedBy = this.guild.members.me.user;
-            randomTrack.addedAt = Date.now();
-
-            // Add to queue
-            this.queue.push(randomTrack);
-           
-            // Preload track
-            this.preloadTrack(randomTrack).catch(err => {
-                if (err && err.message) {
-                    console.error(`❌ Autoplay preload failed: ${err.message}`);
-                }
-            });
-
-            // Start playing from beginning
-            this.currentTrack = this.queue.shift();
-            await this.play(null, 0);
-
-            // Update now playing embed for autoplay track
-            const MusicEmbedManager = require('./MusicEmbedManager');
-            if (global.clients && global.clients.musicEmbedManager) {
-                await global.clients.musicEmbedManager.updateNowPlayingEmbed(this);
-            }
+            await this.startAutoplayTrack(randomTrack);
 
         } catch (error) {
             console.error('❌ Autoplay error:', error.message);
+        }
+    }
+
+    async startAutoplayTrack(track) {
+        track.requestedBy = this.guild.members.me.user;
+        track.addedAt = Date.now();
+        this.queue.push(track);
+
+        this.preloadTrack(track).catch(err => {
+            if (err && err.message) {
+                console.error(`❌ Autoplay preload failed: ${err.message}`);
+            }
+        });
+
+        this.currentTrack = this.queue.shift();
+        await this.play(null, 0);
+
+        if (global.clients && global.clients.musicEmbedManager) {
+            await global.clients.musicEmbedManager.updateNowPlayingEmbed(this);
         }
     }
 

@@ -13,6 +13,7 @@ const ALLOWED_METHODS = new Set([
     'getAlbumTracks',
     'getAlbumTracksPage',
     'getTrackById',
+    'getRandomTrack',
 ]);
 
 parentPort.on('message', message => {

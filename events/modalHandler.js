@@ -80,7 +80,9 @@ module.exports = {
         // Enable autoplay with selected genre
         player.autoplay = selectedGenre;
 
-        const genreName = await LanguageManager.getTranslation(guild?.id, `genres.${selectedGenre}`);
+        const genreName = selectedGenre === 'phyu_random'
+            ? 'Phyu Random Catalogue'
+            : await LanguageManager.getTranslation(guild?.id, `genres.${selectedGenre}`);
         const embed = new EmbedBuilder()
             .setTitle('🎲 ' + await LanguageManager.getTranslation(guild?.id, 'buttonhandler.autoplay_enabled'))
             .setDescription(

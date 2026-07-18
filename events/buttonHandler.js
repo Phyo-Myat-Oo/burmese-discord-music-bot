@@ -14,7 +14,11 @@ module.exports = {
         const member = interaction.member;
 
         // Feature-specific components are handled by their own event modules.
-        if (interaction.customId.startsWith('phyu:') || interaction.customId.startsWith('favorite:')) return;
+        if (
+            interaction.customId.startsWith('phyu:')
+            || interaction.customId.startsWith('favorite:')
+            || interaction.customId.startsWith('autoplay_genre:')
+        ) return;
 
         // Special controls for search buttons
         if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('search_')) {
@@ -672,7 +676,11 @@ module.exports = {
                 new StringSelectMenuOptionBuilder()
                     .setLabel(await LanguageManager.getTranslation(interaction.guild?.id, 'genres.random'))
                     .setValue('random')
-                    .setEmoji('🎲')
+                    .setEmoji('🎲'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Phyu Random Catalogue')
+                    .setValue('phyu_random')
+                    .setEmoji('🌼')
             );
 
         const row = new ActionRowBuilder().addComponents(select);

@@ -79,6 +79,10 @@ class PhyuAutocomplete {
         return this.request('getTrackById', id);
     }
 
+    getRandomTrack(options = {}) {
+        return this.request('getRandomTrack', options);
+    }
+
     rejectAll(error) {
         for (const request of this.pending.values()) request.reject(error);
         this.pending.clear();
