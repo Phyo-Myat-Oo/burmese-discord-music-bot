@@ -596,6 +596,7 @@ module.exports = {
         // If autoplay is already enabled, turn it off
         if (player.autoplay) {
             player.autoplay = false;
+            player.scheduleStatePersist?.('autoplay-off', 0);
             
             const embed = new EmbedBuilder()
                 .setTitle('🎲 ' + await LanguageManager.getTranslation(interaction.guild?.id, 'buttonhandler.autoplay_disabled'))

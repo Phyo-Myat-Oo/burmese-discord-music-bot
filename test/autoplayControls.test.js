@@ -3,6 +3,7 @@ const test = require('node:test');
 const buttonHandler = require('../events/buttonHandler');
 const modalHandler = require('../events/modalHandler');
 const MusicPlayer = require('../src/MusicPlayer');
+const MusicEmbedManager = require('../src/MusicEmbedManager');
 const PhyuAutocomplete = require('../src/catalog/PhyuAutocomplete');
 const YouTube = require('../src/YouTube');
 
@@ -19,9 +20,11 @@ test('leaves autoplay genre selections to the autoplay interaction handler', asy
 });
 
 test('enables the selected autoplay genre and refreshes now playing', async () => {
+    let persistedReason = null;
     const player = {
         autoplay: false,
         voiceChannel: { id: 'voice-1' },
+        scheduleStatePersist: reason => { persistedReason = reason; },
     };
     let reply;
     let refreshed = false;
@@ -48,9 +51,33 @@ test('enables the selected autoplay genre and refreshes now playing', async () =
     await modalHandler.handleAutoplayGenre(interaction, client);
 
     assert.equal(player.autoplay, 'phyu_random');
+    assert.equal(persistedReason, 'autoplay-mode');
     assert.equal(refreshed, true);
     assert.equal(reply.flags[0], 1 << 6);
     assert.match(reply.embeds[0].data.description, /Phyu Random Catalogue/);
+});
+
+test('shows the active autoplay mode consistently in the card and button', async () => {
+    const manager = new MusicEmbedManager({ players: new Map() });
+    const player = {
+        autoplay: 'rnb',
+        guild: { id: 'guild-1' },
+        sessionId: 'session-1',
+        requesterId: 'listener-1',
+        paused: false,
+        shuffle: false,
+        loop: false,
+        queue: [],
+        previousTracks: [],
+        currentTrack: { title: 'Song' },
+    };
+
+    assert.equal(manager.getAutoplayText(player), 'Autoplay: R&B');
+    const rows = await manager.createControlButtons(player);
+    const autoplayButton = rows
+        .flatMap(row => row.components)
+        .find(button => button.data.custom_id.startsWith('music_autoplay:'));
+    assert.equal(autoplayButton.data.label, 'Autoplay: R&B');
 });
 
 test('starts autoplay immediately when the player is already idle', async () => {

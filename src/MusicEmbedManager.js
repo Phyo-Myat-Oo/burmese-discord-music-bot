@@ -41,6 +41,20 @@ class MusicEmbedManager {
         return 'Repeat: Off';
     }
 
+    getAutoplayText(player) {
+        if (!player.autoplay) return 'Autoplay: Off';
+        const modeLabels = {
+            phyu_random: 'Phyu Random',
+            rnb: 'R&B',
+            hiphop: 'Hip-Hop',
+            kpop: 'K-pop',
+            lofi: 'Lo-fi',
+        };
+        const mode = modeLabels[player.autoplay]
+            || String(player.autoplay).replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+        return `Autoplay: ${mode}`;
+    }
+
     createProgressText(player, track) {
         const totalSeconds = Math.max(0, Math.floor(Number(track.duration) || 0));
         const currentSeconds = Math.max(0, Math.floor((Number(player.getCurrentTime?.()) || 0) / 1000));
@@ -360,6 +374,12 @@ class MusicEmbedManager {
             inline: true
         });
 
+        embed.addFields({
+            name: 'Autoplay',
+            value: this.getAutoplayText(player),
+            inline: true
+        });
+
         // Status
         const statusLabel = await LanguageManager.getTranslation(guildId, 'commands.nowplaying.status');
         const statusKey = player.paused
@@ -592,7 +612,7 @@ class MusicEmbedManager {
         // Autoplay button
         let autoplayLabel, autoplayEmoji, autoplayStyle;
         if (player.autoplay) {
-            autoplayLabel = await LanguageManager.getTranslation(guildId, 'buttons.autoplay_on');
+            autoplayLabel = this.getAutoplayText(player);
             autoplayEmoji = '🎲';
             autoplayStyle = ButtonStyle.Success;
         } else {

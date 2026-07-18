@@ -79,6 +79,7 @@ module.exports = {
         
         // Enable autoplay with selected genre
         player.autoplay = selectedGenre;
+        player.scheduleStatePersist?.('autoplay-mode', 0);
 
         const genreName = selectedGenre === 'phyu_random'
             ? 'Phyu Random Catalogue'
