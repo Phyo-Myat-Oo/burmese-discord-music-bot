@@ -124,6 +124,7 @@ class MusicPlayer {
         this.loop = false; // false, 'track', 'queue'
         this.shuffle = false;
         this.autoplay = false; // false or genre string: 'pop', 'rock', 'hiphop', etc.
+        this.autoplayRecoveryInProgress = false;
         this.paused = false;
 
         // Timestamps
@@ -1736,7 +1737,10 @@ class MusicPlayer {
         }
 
         this.currentTrack = this.queue.shift();
-        await this.play(null, 0);
+        const result = await this.play(null, 0);
+        if (!result?.success) {
+            throw new Error(result?.message || 'Autoplay track could not be started.');
+        }
 
         if (global.clients && global.clients.musicEmbedManager) {
             await global.clients.musicEmbedManager.updateNowPlayingEmbed(this);
@@ -1755,13 +1759,30 @@ class MusicPlayer {
             }
             this.currentTrack = this.queue.shift();
             await this.play(null, 0);
-        } else {
-            this.currentTrack = null;
-            const msg = userMessage || await LanguageManager.getTranslation(this.guild.id, 'musicplayer.error_playlist_stopped');
-            if (this.textChannel) {
-                try {
-                    await this.textChannel.send(msg);
-                } catch (_) {}
+            return;
+        }
+
+        this.currentTrack = null;
+
+        // A bad queued source must not disable an active autoplay session.
+        // Prevent recursive recovery if the replacement itself cannot start.
+        if (this.autoplay && !this.autoplayRecoveryInProgress) {
+            this.autoplayRecoveryInProgress = true;
+            try {
+                await this.handleAutoplay();
+                if (this.currentTrack) return;
+            } finally {
+                this.autoplayRecoveryInProgress = false;
+            }
+        } else if (this.autoplayRecoveryInProgress) {
+            return;
+        }
+
+        const msg = userMessage || await LanguageManager.getTranslation(this.guild.id, 'musicplayer.error_playlist_stopped');
+        if (this.textChannel) {
+            try {
+                await this.textChannel.send(msg);
+            } catch (_) {
             }
         }
     }

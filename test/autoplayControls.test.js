@@ -112,6 +112,7 @@ test('starts another indexed Phyu track when random catalogue autoplay is active
         play: async function play() {
             played = true;
             assert.equal(this.currentTrack.platform, 'phyu');
+            return { success: true, track: this.currentTrack };
         },
     });
     global.clients = {
@@ -130,4 +131,25 @@ test('starts another indexed Phyu track when random catalogue autoplay is active
     assert.equal(preloadAttempts, 2);
     assert.equal(player.currentTrack.id, 'phyu:track:43');
     assert.equal(player.currentTrack.extra.catalogue.pcloudFileId, '725200524028587006');
+});
+
+test('returns to autoplay when the last queued source fails', async () => {
+    let autoplayCalls = 0;
+    const replacement = { id: 'phyu:track:replacement' };
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'phyu_random',
+        autoplayRecoveryInProgress: false,
+        currentTrack: { id: 'phyu:track:broken' },
+        queue: [],
+        handleAutoplay: async function handleAutoplay() {
+            autoplayCalls += 1;
+            this.currentTrack = replacement;
+        },
+    });
+
+    await player.handleError(new Error('Source unavailable'));
+
+    assert.equal(autoplayCalls, 1);
+    assert.equal(player.currentTrack, replacement);
+    assert.equal(player.autoplayRecoveryInProgress, false);
 });
