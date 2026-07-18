@@ -77,11 +77,14 @@ test('starts another indexed Phyu track when random catalogue autoplay is active
         global.clients = originalGlobalClients;
     });
 
+    const candidates = [
+        { id: 42, stableKey: 'phyu:track:42', title: 'Unavailable Phyu song' },
+        { id: 43, stableKey: 'phyu:track:43', title: 'Playable Phyu song' },
+    ];
+    let candidateIndex = 0;
     PhyuAutocomplete.getPhyuCatalogClient = () => ({
         getRandomTrack: async () => ({
-            id: 42,
-            stableKey: 'phyu:track:42',
-            title: 'Random Phyu song',
+            ...candidates[Math.min(candidateIndex++, candidates.length - 1)],
             artist: 'Random artist',
             album: 'Random album',
             postUrl: 'https://example.test/post',
@@ -95,12 +98,17 @@ test('starts another indexed Phyu track when random catalogue autoplay is active
 
     let played = false;
     let refreshed = false;
+    let preloadAttempts = 0;
     const player = Object.assign(Object.create(MusicPlayer.prototype), {
         autoplay: 'phyu_random',
         currentTrack: { id: 'phyu:track:1' },
         queue: [],
         guild: { members: { me: { user: { id: 'bot-1' } } } },
-        preloadTrack: async () => {},
+        preloadTrack: async track => {
+            preloadAttempts += 1;
+            if (track.id === 'phyu:track:42') throw new Error('Source unavailable');
+            return true;
+        },
         play: async function play() {
             played = true;
             assert.equal(this.currentTrack.platform, 'phyu');
@@ -119,6 +127,7 @@ test('starts another indexed Phyu track when random catalogue autoplay is active
 
     assert.equal(played, true);
     assert.equal(refreshed, true);
-    assert.equal(player.currentTrack.id, 'phyu:track:42');
+    assert.equal(preloadAttempts, 2);
+    assert.equal(player.currentTrack.id, 'phyu:track:43');
     assert.equal(player.currentTrack.extra.catalogue.pcloudFileId, '725200524028587006');
 });

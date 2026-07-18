@@ -30,6 +30,7 @@ class MediaFireProvider {
             response_format: 'json',
         });
 
+        let apiError = null;
         try {
             const response = await this.fetch(endpoint, {
                 headers: { Accept: 'application/json' },
@@ -49,24 +50,72 @@ class MediaFireProvider {
             const succeeded = apiResponse?.result === 'Success' || apiResponse?.result === 0;
 
             if (!succeeded || !link?.direct_download) {
-                throw new MediaFireProviderError(
-                    apiResponse?.message || apiResponse?.error || 'MediaFire did not return a direct download link.',
-                    { result: apiResponse?.result ?? null }
+                const linkError = apiResponse?.links?.[0];
+                apiError = new MediaFireProviderError(
+                    linkError?.direct_download_error_message
+                        || apiResponse?.message
+                        || apiResponse?.error
+                        || 'MediaFire did not return a direct download link.',
+                    {
+                        result: apiResponse?.result ?? null,
+                        code: linkError?.direct_download_error ?? null,
+                    }
                 );
+            } else {
+                return {
+                    source: 'mediafire',
+                    url: new URL(link.direct_download).toString(),
+                    apiHost: this.apiHost,
+                };
             }
-
-            return {
-                source: 'mediafire',
-                url: new URL(link.direct_download).toString(),
-                apiHost: this.apiHost,
-            };
         } catch (error) {
-            if (error instanceof MediaFireProviderError) throw error;
-            throw new MediaFireProviderError(
+            apiError = error instanceof MediaFireProviderError ? error : new MediaFireProviderError(
                 `Unable to resolve MediaFire track ${track.stableKey || track.id || 'unknown'}.`,
                 { error: error.message }
             );
         }
+
+        try {
+            return await this.resolvePublicRedirect(track);
+        } catch (publicError) {
+            throw new MediaFireProviderError(
+                `${apiError?.message || 'MediaFire API failed'} Public download fallback also failed: ${publicError.message}`,
+                {
+                    api: apiError?.details || { error: apiError?.message || null },
+                    publicPage: publicError.details || { error: publicError.message },
+                }
+            );
+        }
+    }
+
+    async resolvePublicRedirect(track) {
+        const endpoint = new URL(`https://${this.apiHost}/file/${track.mediafireQuickKey}/`);
+        const response = await this.fetch(endpoint, {
+            redirect: 'manual',
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(this.timeoutMs),
+        });
+        const location = response.headers?.get?.('location');
+        if (response.status < 300 || response.status >= 400 || !location) {
+            throw new MediaFireProviderError(
+                `MediaFire public page returned HTTP ${response.status} without a download redirect.`,
+                { httpStatus: response.status }
+            );
+        }
+
+        const downloadUrl = new URL(location, endpoint);
+        if (!/^download\d*\.mediafire\.com$/i.test(downloadUrl.hostname)) {
+            throw new MediaFireProviderError(
+                'MediaFire public page returned an untrusted download host.',
+                { hostname: downloadUrl.hostname }
+            );
+        }
+
+        return {
+            source: 'mediafire-public',
+            url: downloadUrl.toString(),
+            apiHost: this.apiHost,
+        };
     }
 
     validateTrack(track) {

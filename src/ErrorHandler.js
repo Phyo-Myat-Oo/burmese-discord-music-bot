@@ -139,6 +139,11 @@ class ErrorHandler {
     static async handle(error, guildId = null, context = '') {
         const category = this.classify(error);
         console.error(`❌ [${context || 'ErrorHandler'}] [${category}] ${error?.message || error}`);
+        if (Array.isArray(error?.attempts) && error.attempts.length > 0) {
+            for (const attempt of error.attempts) {
+                console.error(`   ↳ ${attempt.source}: ${attempt.error}`);
+            }
+        }
         return await this.getMessage(error, guildId);
     }
 }

@@ -1601,21 +1601,32 @@ class MusicPlayer {
                 const { toMusicTrack } = require('./catalog/PhyuPlayback');
                 const catalogue = getPhyuCatalogClient();
                 const currentIdentity = this.currentTrack?.id || this.currentTrack?.url || null;
-                let catalogueTrack = null;
+                let randomTrack = null;
 
-                // Avoid immediately replaying the same catalogue track when possible.
+                // Avoid immediate repeats and skip catalogue records whose saved
+                // pCloud/MediaFire sources can no longer be downloaded.
                 for (let attempt = 0; attempt < 5; attempt += 1) {
                     const candidate = await catalogue.getRandomTrack();
                     if (!candidate) break;
-                    catalogueTrack = candidate;
-                    if (candidate.stableKey !== currentIdentity) break;
+                    if (candidate.stableKey === currentIdentity && attempt < 4) continue;
+
+                    const playableCandidate = toMusicTrack(candidate);
+                    try {
+                        await this.preloadTrack(playableCandidate, { throwOnError: true });
+                        randomTrack = playableCandidate;
+                        break;
+                    } catch (error) {
+                        console.warn(
+                            `⚠️ Phyu Random skipped unavailable track ${candidate.stableKey}: ${error.message}`
+                        );
+                    }
                 }
 
-                if (!catalogueTrack) {
-                    throw new Error('The Phyu catalogue has no playable tracks.');
+                if (!randomTrack) {
+                    throw new Error('Could not find a playable Phyu catalogue track after 5 attempts.');
                 }
 
-                await this.startAutoplayTrack(toMusicTrack(catalogueTrack));
+                await this.startAutoplayTrack(randomTrack, { preloaded: true });
                 return;
             }
 
@@ -1711,16 +1722,18 @@ class MusicPlayer {
         }
     }
 
-    async startAutoplayTrack(track) {
+    async startAutoplayTrack(track, options = {}) {
         track.requestedBy = this.guild.members.me.user;
         track.addedAt = Date.now();
         this.queue.push(track);
 
-        this.preloadTrack(track).catch(err => {
-            if (err && err.message) {
-                console.error(`❌ Autoplay preload failed: ${err.message}`);
-            }
-        });
+        if (!options.preloaded) {
+            this.preloadTrack(track).catch(err => {
+                if (err && err.message) {
+                    console.error(`❌ Autoplay preload failed: ${err.message}`);
+                }
+            });
+        }
 
         this.currentTrack = this.queue.shift();
         await this.play(null, 0);
@@ -1800,8 +1813,8 @@ class MusicPlayer {
         return this.preloadWindowPromise;
     }
 
-    async preloadTrack(track) {
-        if (!track || !track.url) return;
+    async preloadTrack(track, options = {}) {
+        if (!track || !track.url) return false;
 
         // Check if already downloaded
         const filepath = this.getTrackCachePath(track);
@@ -1811,7 +1824,7 @@ class MusicPlayer {
             if (stats.size > 0) {
                 this.touchDownloadedFile(filepath);
                 await this.enforceCacheLimit();
-                return; // Already downloaded
+                return true; // Already downloaded
             }
         }
 
@@ -1819,7 +1832,7 @@ class MusicPlayer {
         if (this.preloadedStreams.has(track.url) || 
             this.preloadingQueue.includes(track.url) ||
             this.downloadingFiles.has(filepath)) {
-            return;
+            return true;
         }
 
         this.preloadingQueue.push(track.url);
@@ -1879,11 +1892,15 @@ class MusicPlayer {
                     track: track,
                     downloaded: true
                 });
+                return true;
             }
+            return false;
         } catch (error) {
             if (error && error.message) {
                 console.error(`❌ Pre-download failed for ${track.title}:`, error.message);
             }
+            if (options.throwOnError) throw error;
+            return false;
         } finally {
             // Remove from preloading queue
             const index = this.preloadingQueue.indexOf(track.url);
