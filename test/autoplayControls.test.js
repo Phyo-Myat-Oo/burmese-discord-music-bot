@@ -233,3 +233,75 @@ test('returns to autoplay when the last queued source fails', async () => {
     assert.equal(player.currentTrack, replacement);
     assert.equal(player.autoplayRecoveryInProgress, false);
 });
+
+test('clears the finished song before generating every next autoplay song', async () => {
+    const finished = { id: 'youtube-finished', url: 'https://youtube.test/finished', duration: 100 };
+    let receivedOptions;
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'pop',
+        autoplayInProgress: false,
+        isTransitioning: false,
+        trackTimer: null,
+        currentTrack: finished,
+        resource: { playbackDuration: 100_000 },
+        currentTrackStartOffsetMs: 0,
+        previousTracks: [],
+        currentDownloadedFile: null,
+        loop: false,
+        queue: [],
+        handleAutoplay: async function handleAutoplay(options) {
+            receivedOptions = options;
+            assert.equal(this.currentTrack, null);
+            this.currentTrack = { id: 'youtube-next' };
+            return true;
+        },
+    });
+
+    await player.handleTrackEnd('idle');
+
+    assert.equal(receivedOptions.excludeIdentity, finished.id);
+    assert.equal(player.currentTrack.id, 'youtube-next');
+    assert.equal(player.isTransitioning, false);
+});
+
+test('schedules a future retry when autoplay search temporarily fails', async t => {
+    const originalSearch = YouTube.search;
+    t.after(() => { YouTube.search = originalSearch; });
+    YouTube.search = async () => { throw new Error('Temporary YouTube failure'); };
+
+    let retryError;
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'pop',
+        autoplayInProgress: false,
+        currentTrack: null,
+        guild: { id: 'guild-1' },
+        scheduleAutoplayRetry: error => { retryError = error; },
+    });
+
+    const started = await player.handleAutoplay();
+
+    assert.equal(started, false);
+    assert.match(retryError.message, /Temporary YouTube failure/);
+    assert.equal(player.currentTrack, null);
+    assert.equal(player.autoplayInProgress, false);
+});
+
+test('autoplay retry uses increasing backoff and can be cancelled', t => {
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'pop',
+        autoplayRetryTimer: null,
+        autoplayRetryAttempts: 0,
+        currentTrack: null,
+        queue: [],
+    });
+    t.after(() => player.clearAutoplayRetry());
+
+    assert.equal(player.scheduleAutoplayRetry(new Error('temporary')), true);
+    assert.equal(player.autoplayRetryAttempts, 1);
+    assert.ok(player.autoplayRetryTimer);
+    assert.equal(player.scheduleAutoplayRetry(), false);
+
+    player.clearAutoplayRetry();
+    assert.equal(player.autoplayRetryTimer, null);
+    assert.equal(player.autoplayRetryAttempts, 0);
+});

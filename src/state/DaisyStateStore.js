@@ -113,6 +113,56 @@ class DaisyStateStore {
                 throw error;
             }
         }
+
+        if (!applied.has(3)) {
+            this.database.exec('BEGIN IMMEDIATE');
+            try {
+                this.database.exec(`
+                    CREATE TABLE playlists (
+                        id INTEGER PRIMARY KEY,
+                        scope_type TEXT NOT NULL CHECK(scope_type IN ('personal', 'server')),
+                        scope_id TEXT NOT NULL CHECK(length(scope_id) BETWEEN 1 AND 64),
+                        created_by TEXT NOT NULL CHECK(length(created_by) BETWEEN 1 AND 64),
+                        name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 50),
+                        name_key TEXT NOT NULL CHECK(length(name_key) BETWEEN 1 AND 50),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        UNIQUE(scope_type, scope_id, name_key)
+                    ) STRICT;
+
+                    CREATE INDEX idx_playlists_scope_name
+                    ON playlists(scope_type, scope_id, name_key);
+
+                    CREATE TABLE playlist_tracks (
+                        id INTEGER PRIMARY KEY,
+                        playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+                        source_type TEXT NOT NULL CHECK(source_type IN ('phyu', 'youtube', 'spotify', 'soundcloud', 'direct')),
+                        source_key TEXT NOT NULL CHECK(length(source_key) BETWEEN 1 AND 2048),
+                        title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 1024),
+                        artist TEXT,
+                        album TEXT,
+                        source_url TEXT,
+                        duration INTEGER NOT NULL DEFAULT 0 CHECK(duration >= 0),
+                        thumbnail TEXT,
+                        playback_json TEXT NOT NULL CHECK(json_valid(playback_json)),
+                        position INTEGER NOT NULL CHECK(position > 0),
+                        added_by TEXT NOT NULL CHECK(length(added_by) BETWEEN 1 AND 64),
+                        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        UNIQUE(playlist_id, source_type, source_key)
+                    ) STRICT;
+
+                    CREATE INDEX idx_playlist_tracks_position
+                    ON playlist_tracks(playlist_id, position, id);
+
+                    INSERT INTO state_schema_migrations(version) VALUES (3);
+                `);
+                this.database.exec('COMMIT');
+            } catch (error) {
+                this.database.exec('ROLLBACK');
+                throw error;
+            }
+        }
     }
 
     prepareStatements() {
@@ -168,6 +218,67 @@ class DaisyStateStore {
                     created_at DESC,
                     id DESC
                 LIMIT $limit
+            `),
+            createPlaylist: this.database.prepare(`
+                INSERT INTO playlists(scope_type, scope_id, created_by, name, name_key)
+                VALUES (?, ?, ?, ?, ?)
+            `),
+            playlistById: this.database.prepare(`
+                SELECT p.*,
+                    (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count
+                FROM playlists p WHERE p.id = ?
+            `),
+            listPlaylists: this.database.prepare(`
+                SELECT p.*,
+                    (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS track_count
+                FROM playlists p
+                WHERE p.scope_type = ? AND p.scope_id = ?
+                ORDER BY p.name_key, p.id
+                LIMIT ?
+            `),
+            countPlaylists: this.database.prepare(`
+                SELECT COUNT(*) AS count FROM playlists WHERE scope_type = ? AND scope_id = ?
+            `),
+            renamePlaylist: this.database.prepare(`
+                UPDATE playlists
+                SET name = ?, name_key = ?, updated_at = datetime('now')
+                WHERE id = ?
+            `),
+            deletePlaylist: this.database.prepare('DELETE FROM playlists WHERE id = ?'),
+            playlistTrackByIdentity: this.database.prepare(`
+                SELECT * FROM playlist_tracks
+                WHERE playlist_id = ? AND source_type = ? AND source_key = ?
+            `),
+            playlistTrackById: this.database.prepare(`
+                SELECT * FROM playlist_tracks WHERE id = ? AND playlist_id = ?
+            `),
+            addPlaylistTrack: this.database.prepare(`
+                INSERT INTO playlist_tracks (
+                    playlist_id, source_type, source_key, title, artist, album,
+                    source_url, duration, thumbnail, playback_json, position, added_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    (SELECT COALESCE(MAX(position), 0) + 1 FROM playlist_tracks WHERE playlist_id = ?), ?)
+            `),
+            listPlaylistTracks: this.database.prepare(`
+                SELECT * FROM playlist_tracks
+                WHERE playlist_id = $playlistId
+                ORDER BY position, id
+                LIMIT $limit OFFSET $offset
+            `),
+            allPlaylistTracks: this.database.prepare(`
+                SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position, id
+            `),
+            countPlaylistTracks: this.database.prepare(`
+                SELECT COUNT(*) AS count FROM playlist_tracks WHERE playlist_id = ?
+            `),
+            deletePlaylistTrack: this.database.prepare(`
+                DELETE FROM playlist_tracks WHERE id = ? AND playlist_id = ?
+            `),
+            updatePlaylistTrackPosition: this.database.prepare(`
+                UPDATE playlist_tracks SET position = ?, updated_at = datetime('now') WHERE id = ?
+            `),
+            touchPlaylist: this.database.prepare(`
+                UPDATE playlists SET updated_at = datetime('now') WHERE id = ?
             `),
             claimDailyGreeting: this.database.prepare(`
                 INSERT INTO daily_greetings (guild_id, user_id, local_date)
@@ -282,6 +393,151 @@ class DaisyStateStore {
         return rows.map(row => this.mapFavorite(row));
     }
 
+    createPlaylist(playlist) {
+        const result = this.statements.createPlaylist.run(
+            playlist.scopeType,
+            playlist.scopeId,
+            playlist.createdBy,
+            playlist.name,
+            playlist.nameKey
+        );
+        return this.getPlaylistById(result.lastInsertRowid);
+    }
+
+    getPlaylistById(playlistId) {
+        const id = positiveInteger(playlistId, 0);
+        if (!id) return null;
+        const row = this.statements.playlistById.get(id);
+        return row ? this.mapPlaylist(row) : null;
+    }
+
+    listPlaylists(scopeType, scopeId, options = {}) {
+        const rows = this.statements.listPlaylists.all(
+            scopeType,
+            String(scopeId),
+            Math.min(positiveInteger(options.limit, MAX_PAGE_SIZE), MAX_PAGE_SIZE)
+        );
+        return rows.map(row => this.mapPlaylist(row));
+    }
+
+    countPlaylists(scopeType, scopeId) {
+        return this.statements.countPlaylists.get(scopeType, String(scopeId)).count;
+    }
+
+    renamePlaylist(playlistId, name, nameKey) {
+        const id = positiveInteger(playlistId, 0);
+        if (!id) return null;
+        if (!this.statements.renamePlaylist.run(name, nameKey, id).changes) return null;
+        return this.getPlaylistById(id);
+    }
+
+    deletePlaylist(playlistId) {
+        const id = positiveInteger(playlistId, 0);
+        return id ? this.statements.deletePlaylist.run(id).changes > 0 : false;
+    }
+
+    addPlaylistTrack(track) {
+        const result = this.statements.addPlaylistTrack.run(
+            track.playlistId,
+            track.sourceType,
+            track.sourceKey,
+            track.title,
+            track.artist || null,
+            track.album || null,
+            track.sourceUrl || null,
+            Math.max(0, Math.floor(Number(track.duration) || 0)),
+            track.thumbnail || null,
+            track.playbackJson,
+            track.playlistId,
+            track.addedBy
+        );
+        this.statements.touchPlaylist.run(track.playlistId);
+        return this.mapPlaylistTrack(this.statements.playlistTrackById.get(
+            result.lastInsertRowid,
+            track.playlistId
+        ));
+    }
+
+    hasPlaylistTrack(playlistId, sourceType, sourceKey) {
+        return Boolean(this.statements.playlistTrackByIdentity.get(
+            positiveInteger(playlistId, 0),
+            sourceType,
+            sourceKey
+        ));
+    }
+
+    getPlaylistTrackById(playlistId, trackId) {
+        const row = this.statements.playlistTrackById.get(
+            positiveInteger(trackId, 0),
+            positiveInteger(playlistId, 0)
+        );
+        return row ? this.mapPlaylistTrack(row) : null;
+    }
+
+    listPlaylistTracks(playlistId, options = {}) {
+        const rows = this.statements.listPlaylistTracks.all({
+            $playlistId: positiveInteger(playlistId, 0),
+            $limit: Math.min(positiveInteger(options.limit, MAX_PAGE_SIZE), MAX_PAGE_SIZE),
+            $offset: normalizeOffset(options.offset),
+        });
+        return rows.map(row => this.mapPlaylistTrack(row));
+    }
+
+    listAllPlaylistTracks(playlistId) {
+        return this.statements.allPlaylistTracks.all(positiveInteger(playlistId, 0))
+            .map(row => this.mapPlaylistTrack(row));
+    }
+
+    countPlaylistTracks(playlistId) {
+        return this.statements.countPlaylistTracks.get(positiveInteger(playlistId, 0)).count;
+    }
+
+    removePlaylistTrack(playlistId, trackId) {
+        const playlist = positiveInteger(playlistId, 0);
+        const track = positiveInteger(trackId, 0);
+        if (!playlist || !track) return false;
+        this.database.exec('BEGIN IMMEDIATE');
+        try {
+            const removed = this.statements.deletePlaylistTrack.run(track, playlist).changes > 0;
+            if (removed) this.resequencePlaylistTracks(playlist);
+            this.database.exec('COMMIT');
+            return removed;
+        } catch (error) {
+            this.database.exec('ROLLBACK');
+            throw error;
+        }
+    }
+
+    movePlaylistTrack(playlistId, trackId, direction) {
+        const playlist = positiveInteger(playlistId, 0);
+        const track = positiveInteger(trackId, 0);
+        const tracks = this.statements.allPlaylistTracks.all(playlist);
+        const index = tracks.findIndex(row => row.id === track);
+        const target = direction === 'up' ? index - 1 : direction === 'down' ? index + 1 : index;
+        if (index < 0 || target < 0 || target >= tracks.length || target === index) return false;
+        [tracks[index], tracks[target]] = [tracks[target], tracks[index]];
+        this.database.exec('BEGIN IMMEDIATE');
+        try {
+            tracks.forEach((row, position) => {
+                this.statements.updatePlaylistTrackPosition.run(position + 1, row.id);
+            });
+            this.statements.touchPlaylist.run(playlist);
+            this.database.exec('COMMIT');
+            return true;
+        } catch (error) {
+            this.database.exec('ROLLBACK');
+            throw error;
+        }
+    }
+
+    resequencePlaylistTracks(playlistId) {
+        const tracks = this.statements.allPlaylistTracks.all(playlistId);
+        tracks.forEach((row, position) => {
+            this.statements.updatePlaylistTrackPosition.run(position + 1, row.id);
+        });
+        this.statements.touchPlaylist.run(playlistId);
+    }
+
     validateFavorite(favorite) {
         if (!favorite || typeof favorite !== 'object') throw new TypeError('Favorite data is required.');
         if (!favorite.userId) throw new TypeError('Favorite userId is required.');
@@ -311,6 +567,40 @@ class DaisyStateStore {
             duration: row.duration,
             thumbnail: row.thumbnail,
             playbackJson: row.playback_json,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        };
+    }
+
+    mapPlaylist(row) {
+        return {
+            id: row.id,
+            scopeType: row.scope_type,
+            scopeId: row.scope_id,
+            createdBy: row.created_by,
+            name: row.name,
+            nameKey: row.name_key,
+            trackCount: Number(row.track_count || 0),
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        };
+    }
+
+    mapPlaylistTrack(row) {
+        return {
+            id: row.id,
+            playlistId: row.playlist_id,
+            sourceType: row.source_type,
+            sourceKey: row.source_key,
+            title: row.title,
+            artist: row.artist,
+            album: row.album,
+            sourceUrl: row.source_url,
+            duration: row.duration,
+            thumbnail: row.thumbnail,
+            playbackJson: row.playback_json,
+            position: row.position,
+            addedBy: row.added_by,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
         };

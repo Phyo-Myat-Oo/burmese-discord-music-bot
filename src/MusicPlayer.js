@@ -125,6 +125,9 @@ class MusicPlayer {
         this.shuffle = false;
         this.autoplay = false; // false or genre string: 'pop', 'rock', 'hiphop', etc.
         this.autoplayRecoveryInProgress = false;
+        this.autoplayInProgress = false;
+        this.autoplayRetryTimer = null;
+        this.autoplayRetryAttempts = 0;
         this.paused = false;
 
         // Timestamps
@@ -1556,7 +1559,9 @@ class MusicPlayer {
 
             if (this.autoplay) {
                 this.currentTrackRetries = 0;
-                await this.handleAutoplay();
+                const excludeIdentity = finishedTrack.id || finishedTrack.url || null;
+                this.currentTrack = null;
+                await this.handleAutoplay({ excludeIdentity });
                 return;
             }
 
@@ -1593,15 +1598,21 @@ class MusicPlayer {
         }
     }
 
-    async handleAutoplay() {
-        if (!this.autoplay || typeof this.autoplay !== 'string') return;
+    async handleAutoplay(options = {}) {
+        if (!this.autoplay || typeof this.autoplay !== 'string') return false;
+        if (this.autoplayInProgress) return false;
+
+        this.autoplayInProgress = true;
 
         try {
             if (this.autoplay === 'phyu_random') {
                 const { getPhyuCatalogClient } = require('./catalog/PhyuAutocomplete');
                 const { toMusicTrack } = require('./catalog/PhyuPlayback');
                 const catalogue = getPhyuCatalogClient();
-                const currentIdentity = this.currentTrack?.id || this.currentTrack?.url || null;
+                const currentIdentity = options.excludeIdentity
+                    || this.currentTrack?.id
+                    || this.currentTrack?.url
+                    || null;
                 let randomTrack = null;
 
                 // Avoid immediate repeats and skip catalogue records whose saved
@@ -1628,7 +1639,8 @@ class MusicPlayer {
                 }
 
                 await this.startAutoplayTrack(randomTrack, { preloaded: true });
-                return;
+                this.clearAutoplayRetry();
+                return true;
             }
 
             // Genre-specific search keywords
@@ -1661,7 +1673,10 @@ class MusicPlayer {
             // duration is not proof that the video is unplayable; getStream()
             // resolves the full metadata after a candidate is selected.
             const YouTube = require('./YouTube');
-            const currentIdentity = this.currentTrack?.id || this.currentTrack?.url || null;
+            const currentIdentity = options.excludeIdentity
+                || this.currentTrack?.id
+                || this.currentTrack?.url
+                || null;
             const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
             const results = await YouTube.search(randomKeyword, 15, this.guild.id);
 
@@ -1722,10 +1737,43 @@ class MusicPlayer {
             // Pick random track from filtered results
             const randomTrack = filteredResults[Math.floor(Math.random() * filteredResults.length)];
             await this.startAutoplayTrack(randomTrack);
+            this.clearAutoplayRetry();
+            return true;
 
         } catch (error) {
             console.error('❌ Autoplay error:', error.message);
+            this.currentTrack = null;
+            this.scheduleAutoplayRetry(error);
+            return false;
+        } finally {
+            this.autoplayInProgress = false;
         }
+    }
+
+    scheduleAutoplayRetry(error = null) {
+        if (!this.autoplay || this.autoplayRetryTimer) return false;
+        this.autoplayRetryAttempts += 1;
+        const delays = [5_000, 15_000, 30_000, 60_000, 120_000];
+        const delay = delays[Math.min(this.autoplayRetryAttempts - 1, delays.length - 1)];
+        console.warn(
+            `⚠️ Autoplay will retry in ${Math.round(delay / 1000)}s`
+            + `${error?.message ? `: ${error.message}` : '.'}`
+        );
+        this.autoplayRetryTimer = setTimeout(async () => {
+            this.autoplayRetryTimer = null;
+            if (!this.autoplay || this.currentTrack || this.queue.length > 0) return;
+            await this.handleAutoplay();
+        }, delay);
+        this.autoplayRetryTimer.unref?.();
+        return true;
+    }
+
+    clearAutoplayRetry() {
+        if (this.autoplayRetryTimer) {
+            clearTimeout(this.autoplayRetryTimer);
+            this.autoplayRetryTimer = null;
+        }
+        this.autoplayRetryAttempts = 0;
     }
 
     async startAutoplayTrack(track, options = {}) {
@@ -1771,6 +1819,11 @@ class MusicPlayer {
 
         // A bad queued source must not disable an active autoplay session.
         // Prevent recursive recovery if the replacement itself cannot start.
+        if (this.autoplayInProgress) {
+            // The outer autoplay attempt owns retry scheduling.
+            return;
+        }
+
         if (this.autoplay && !this.autoplayRecoveryInProgress) {
             this.autoplayRecoveryInProgress = true;
             try {
@@ -1779,6 +1832,8 @@ class MusicPlayer {
             } finally {
                 this.autoplayRecoveryInProgress = false;
             }
+            // A retry is scheduled by handleAutoplay; keep the voice session alive.
+            return;
         } else if (this.autoplayRecoveryInProgress) {
             return;
         }
@@ -2271,6 +2326,7 @@ class MusicPlayer {
         try {
             this.clearInactivityTimer(false);
             this.stopStateSync();
+            this.clearAutoplayRetry();
 
             // During shutdown, save state before cleanup
             if (isShutdown && this.guild?.id) {

@@ -2,7 +2,7 @@
 
 Daisy is a Discord music bot built for Burmese music communities. It combines the
 indexed **Phyu Ni War Pyar** catalogue with YouTube playback, an interactive
-queue, favorites, local audio caching, and Burmese help text.
+queue, favorites, persistent playlists, local audio caching, and Burmese help text.
 
 > Daisy က Phyu Ni War Pyar မှ မြန်မာသီချင်းများနှင့် YouTube သီချင်းများကို
 > Discord voice channel ထဲတွင် ရှာဖွေ၊ ရွေးချယ်ပြီး အတူတူနားထောင်နိုင်သည့်
@@ -21,6 +21,7 @@ catalogue and user experience for Daisy.
 - Search up to 25 YouTube results across pages of nine.
 - Select songs across multiple YouTube pages and queue them together.
 - Save personal favorites and play them from autocomplete or a private browser.
+- Build private personal playlists or shared server playlists through one interactive command.
 - Control playback with Previous, Pause/Resume, Skip, Stop, Shuffle, Volume,
   Repeat, Autoplay, Favorite, and Queue buttons.
 - Reorder queued tracks, clear upcoming songs, and return to the Now Playing card.
@@ -43,6 +44,7 @@ catalogue and user experience for Daisy.
 | `/favorites list` | Browse and play saved favorites. |
 | `/favorites play query:` | Play a saved favorite using autocomplete. |
 | `/favorites remove query:` | Remove a saved favorite. |
+| `/playlists` | Privately manage personal and shared server playlists through one interactive browser. |
 | `/nowplaying` | Reopen the current interactive Now Playing card. |
 | `/help` | Show the Burmese command and control guide. |
 
@@ -56,6 +58,25 @@ The Now Playing card provides Previous, Pause/Resume, Skip, Stop, Queue,
 Shuffle, Volume, Repeat, Autoplay, and Favorite controls. The Queue view supports
 pagination, reordering, and clearing upcoming tracks without stopping the
 current song.
+
+## One-command playlist manager
+
+Run `/playlists` to open an ephemeral manager that only you can operate. Choose
+**Personal** for playlists that follow your Discord account across servers, or
+**Server** for playlists that every member of the current server may create,
+edit, play, rename, and delete.
+
+The manager supports Create, Play All, Shuffle Play, Add Current, Move Up/Down,
+Remove Track, Rename, Delete, Back, and paginated track browsing. Creating and
+renaming use Discord forms, and deletion requires confirmation. The **Playlist**
+button on the Now Playing card opens the same private picker for the current
+song.
+
+Each scope supports 25 playlists and each playlist supports 50 unique songs.
+Saved order is preserved; Shuffle Play changes only the newly queued copy.
+Unavailable entries are skipped without preventing valid songs from being
+queued. Phyu songs are resolved against fresh catalogue/provider data at play
+time, while YouTube and other sources retain stable source URLs.
 
 Autoplay starts when the current queue becomes empty:
 
@@ -324,7 +345,7 @@ Daisy uses the playback architecture from
 [`umutxyp/MusicBot`](https://github.com/umutxyp/MusicBot), imported from upstream
 commit `e3c825e5ec19c8756bf6612bb7f1f7569501e526` (Beatra v16.0.0), and extends it
 with the Phyu Ni War Pyar catalogue, pCloud/MediaFire resolution, Burmese search,
-favorites, and Daisy-specific Discord interfaces.
+favorites, personal/shared playlists, and Daisy-specific Discord interfaces.
 
 ## License
 

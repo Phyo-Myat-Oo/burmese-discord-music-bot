@@ -48,10 +48,19 @@ function buildHelpPayload(client) {
                 inline: false,
             },
             {
+                name: '🎶 Playlists',
+                value: [
+                    '`/playlists` — ကိုယ်ပိုင် playlist နှင့် server အားလုံးသုံး playlist များကို ဖွင့်ရန်',
+                    '**Create · Play All · Shuffle Play · Add Current · Move · Rename · Delete** အားလုံးကို private browser တစ်ခုထဲမှာ လုပ်နိုင်ပါတယ်။',
+                    'Now Playing card ပေါ်က **Playlist** ခလုတ်ဖြင့် လက်ရှိသီချင်းကို အလွယ်တကူ သိမ်းနိုင်ပါတယ်။',
+                ].join('\n'),
+                inline: false,
+            },
+            {
                 name: '🎛️ Player နှင့် Queue ခလုတ်များ',
                 value: [
                     '**Previous · Pause/Resume · Skip · Stop · Queue**',
-                    '**Shuffle · Volume · Repeat · Autoplay · Favorite**',
+                    '**Shuffle · Volume · Repeat · Autoplay · Favorite · Playlist**',
                     'Queue ထဲမှာ သီချင်းရွေးပြီး နေရာပြောင်းနိုင်သလို **Clear Queue** နဲ့ queue အားလုံးရှင်းနိုင်ပါတယ်။',
                     'Bot ရှိနေတဲ့ voice channel ထဲက နားထောင်သူတိုင်း playback ခလုတ်တွေကို အသုံးပြုနိုင်ပါတယ်။',
                 ].join('\n'),
@@ -69,6 +78,7 @@ function buildHelpPayload(client) {
             {
                 name: 'ℹ️ အခြား command များ',
                 value: [
+                    '`/playlists` — playlist manager ကို private အနေနဲ့ ဖွင့်ရန်',
                     '`/nowplaying` — လက်ရှိဖွင့်နေသော သီချင်းအချက်အလက်နှင့် progress ကိုကြည့်ရန်',
                     '`/help` — ဒီအသုံးပြုနည်းစာမျက်နှာကို ပြန်ဖွင့်ရန်',
                 ].join('\n'),

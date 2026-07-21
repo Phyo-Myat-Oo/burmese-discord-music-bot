@@ -7,6 +7,9 @@ module.exports = {
     async execute(interaction) {
         if (!interaction.isModalSubmit() && !interaction.isStringSelectMenu()) return;
 
+        // Playlist components and modals are handled by playlistBrowser.js.
+        if (interaction.customId.startsWith('playlist:')) return;
+
         const client = interaction.client;
         const guild = interaction.guild;
         const member = interaction.member;
@@ -79,6 +82,7 @@ module.exports = {
         
         // Enable autoplay with selected genre
         player.autoplay = selectedGenre;
+        player.clearAutoplayRetry?.();
         player.scheduleStatePersist?.('autoplay-mode', 0);
 
         const genreName = selectedGenre === 'phyu_random'

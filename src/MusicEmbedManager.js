@@ -635,6 +635,13 @@ class MusicEmbedManager {
             .setEmoji('⭐')
             .setDisabled(disabled || !player.currentTrack);
 
+        const playlistButton = new ButtonBuilder()
+            .setCustomId(`playlist:current:${sessionId}`)
+            .setLabel('Playlist')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('🎶')
+            .setDisabled(disabled || !player.currentTrack);
+
         // Keep related controls on predictable rows, including on narrow Discord clients.
         const transportRow = new ActionRowBuilder()
             .addComponents(previousButton, pauseButton, skipButton);
@@ -643,7 +650,7 @@ class MusicEmbedManager {
         const playbackModeRow = new ActionRowBuilder()
             .addComponents(shuffleButton, loopButton, autoplayButton);
         const personalRow = new ActionRowBuilder()
-            .addComponents(volumeButton, favoriteButton);
+            .addComponents(volumeButton, favoriteButton, playlistButton);
 
         return [transportRow, sessionRow, playbackModeRow, personalRow];
     }

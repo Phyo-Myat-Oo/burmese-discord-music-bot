@@ -26,10 +26,14 @@ test('organizes now-playing controls into predictable functional rows', async ()
         ['music_previous', 'music_pause', 'music_skip'],
         ['music_stop', 'music_queue'],
         ['music_shuffle', 'music_loop', 'music_autoplay'],
-        ['music_volume', 'favorite'],
+        ['music_volume', 'favorite', 'playlist'],
     ]);
     assert.equal(
         rows[3].toJSON().components[1].custom_id,
         'favorite:current-toggle:session-1'
+    );
+    assert.equal(
+        rows[3].toJSON().components[2].custom_id,
+        'playlist:current:session-1'
     );
 });

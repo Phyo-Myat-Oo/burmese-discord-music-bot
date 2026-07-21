@@ -17,6 +17,7 @@ module.exports = {
         if (
             interaction.customId.startsWith('phyu:')
             || interaction.customId.startsWith('favorite:')
+            || interaction.customId.startsWith('playlist:')
             || interaction.customId.startsWith('autoplay_genre:')
         ) return;
 
@@ -596,6 +597,7 @@ module.exports = {
         // If autoplay is already enabled, turn it off
         if (player.autoplay) {
             player.autoplay = false;
+            player.clearAutoplayRetry?.();
             player.scheduleStatePersist?.('autoplay-off', 0);
             
             const embed = new EmbedBuilder()

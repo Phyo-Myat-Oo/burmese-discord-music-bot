@@ -30,6 +30,7 @@ test('lists every current public command in Burmese help', () => {
     assert.match(text, /\/favorites list/);
     assert.match(text, /\/favorites play/);
     assert.match(text, /\/favorites remove/);
+    assert.match(text, /\/playlists/);
     assert.match(text, /\/nowplaying/);
     assert.match(text, /\/help/);
     assert.match(text, /Phyu Random Catalogue/);
