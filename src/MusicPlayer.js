@@ -37,6 +37,10 @@ const PRELOAD_AHEAD_COUNT = 5;
 const PHYU_PRELOAD_AHEAD_COUNT = 1;
 const MAX_CACHED_TRACKS = 10;
 const DISCORD_OPUS_BITRATE = 96_000;
+const AUTOPLAY_RECENT_TRACK_LIMIT = 20;
+const AUTOPLAY_FAILED_TRACK_LIMIT = 40;
+const AUTOPLAY_SEARCH_RESULT_LIMIT = 25;
+const AUTOPLAY_SEARCH_ATTEMPTS = 3;
 
 // Ensure cache directory exists
 if (!fsSync.existsSync(CACHE_DIR)) {
@@ -128,6 +132,9 @@ class MusicPlayer {
         this.autoplayInProgress = false;
         this.autoplayRetryTimer = null;
         this.autoplayRetryAttempts = 0;
+        this.autoplayRecentTrackIds = [];
+        this.autoplayFailedTrackIds = [];
+        this.autoplaySearchCursor = 0;
         this.paused = false;
 
         // Timestamps
@@ -1598,6 +1605,68 @@ class MusicPlayer {
         }
     }
 
+    getAutoplayTrackIdentity(track) {
+        const identity = track?.id || track?.url || null;
+        return identity === null || identity === undefined ? null : String(identity);
+    }
+
+    rememberAutoplayTrack(collectionName, identity, limit) {
+        if (!identity) return;
+
+        const normalizedIdentity = String(identity);
+        const collection = Array.isArray(this[collectionName]) ? this[collectionName] : [];
+        this[collectionName] = collection.filter(value => value !== normalizedIdentity);
+        this[collectionName].push(normalizedIdentity);
+        if (this[collectionName].length > limit) {
+            this[collectionName].splice(0, this[collectionName].length - limit);
+        }
+    }
+
+    rememberRecentAutoplayTrack(trackOrIdentity) {
+        const identity = typeof trackOrIdentity === 'object'
+            ? this.getAutoplayTrackIdentity(trackOrIdentity)
+            : trackOrIdentity;
+        this.rememberAutoplayTrack(
+            'autoplayRecentTrackIds',
+            identity,
+            AUTOPLAY_RECENT_TRACK_LIMIT
+        );
+    }
+
+    rememberFailedAutoplayTrack(trackOrIdentity) {
+        const identity = typeof trackOrIdentity === 'object'
+            ? this.getAutoplayTrackIdentity(trackOrIdentity)
+            : trackOrIdentity;
+        this.rememberAutoplayTrack(
+            'autoplayFailedTrackIds',
+            identity,
+            AUTOPLAY_FAILED_TRACK_LIMIT
+        );
+    }
+
+    isPlayableAutoplaySearchResult(track) {
+        if (!track?.url) return false;
+
+        const duration = Number(track.duration) || 0;
+        if (duration > 0 && (duration < 30 || duration > 600)) return false;
+
+        const title = (track.title || '').toLowerCase();
+        const blockedKeywords = [
+            'tutorial', 'lesson', 'course', 'learn', 'learning',
+            'podcast', 'interview', 'talk', 'speech', 'lecture',
+            'review', 'unboxing', 'reaction', 'gameplay',
+            'full movie', 'full album', 'full episode', 'documentary',
+            'how to', 'guide', 'tips', 'tricks', 'vlog',
+            'practice', 'exercise', 'workout', 'meditation',
+            'asmr', 'story', 'audiobook', 'mix |', 'compilation'
+        ];
+        if (blockedKeywords.some(keyword => title.includes(keyword))) return false;
+
+        const emojiCount = (title.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
+        const bracketCount = (title.match(/[\[\]【】]/g) || []).length;
+        return emojiCount <= 3 && bracketCount <= 4;
+    }
+
     async handleAutoplay(options = {}) {
         if (!this.autoplay || typeof this.autoplay !== 'string') return false;
         if (this.autoplayInProgress) return false;
@@ -1645,26 +1714,26 @@ class MusicPlayer {
 
             // Genre-specific search keywords
             const genreKeywords = {
-                pop: ['pop music 2024', 'top pop songs', 'pop hits official', 'best pop music'],
-                rock: ['rock music official', 'rock songs 2024', 'classic rock hits', 'best rock music'],
-                hiphop: ['hip hop music', 'rap songs official', 'hip hop 2024', 'best rap music'],
-                electronic: ['edm music', 'electronic dance music', 'house music official', 'best edm'],
-                jazz: ['jazz music', 'jazz standards', 'smooth jazz official', 'best jazz'],
-                classical: ['classical music', 'classical piano', 'orchestra music', 'best classical'],
-                metal: ['metal music official', 'heavy metal songs', 'metal 2024', 'best metal'],
-                country: ['country music official', 'country songs 2024', 'best country music'],
-                rnb: ['r&b music official', 'rnb songs 2024', 'soul music', 'best rnb'],
-                indie: ['indie music official', 'indie songs 2024', 'alternative music', 'best indie'],
-                latin: ['latin music official', 'reggaeton 2024', 'latin hits', 'best latin music'],
-                kpop: ['kpop official mv', 'kpop songs 2024', 'korean music official', 'best kpop'],
-                anime: ['anime opening official', 'anime songs official', 'anime music 2024', 'best anime op'],
-                lofi: ['lofi hip hop music', 'lofi beats official', 'chill lofi music', 'best lofi'],
-                blues: ['blues music official', 'blues songs', 'blues guitar music', 'best blues'],
-                reggae: ['reggae music official', 'reggae songs 2024', 'best reggae music'],
-                disco: ['disco music official', 'disco hits', 'best disco music'],
-                punk: ['punk rock official', 'punk music 2024', 'pop punk songs', 'best punk'],
-                ambient: ['ambient music official', 'ambient soundscape', 'atmospheric music', 'best ambient'],
-                random: ['music official video', 'top songs 2024', 'music video official', 'best music']
+                pop: ['pop music official video', 'latest pop songs', 'pop hits official audio', 'popular pop artists', 'new pop music'],
+                rock: ['rock music official video', 'modern rock songs', 'classic rock official audio', 'alternative rock songs', 'new rock music'],
+                hiphop: ['hip hop music official video', 'rap songs official audio', 'new hip hop songs', 'popular rap artists', 'underground hip hop'],
+                electronic: ['edm official video', 'electronic dance music', 'house music official audio', 'new electronic music', 'dance music artists'],
+                jazz: ['jazz music performance', 'jazz standards', 'smooth jazz official', 'modern jazz artists', 'jazz quartet'],
+                classical: ['classical music performance', 'classical piano', 'orchestra performance', 'famous classical composers', 'chamber music'],
+                metal: ['metal music official video', 'heavy metal songs', 'modern metal bands', 'metal official audio', 'new metal music'],
+                country: ['country music official video', 'new country songs', 'country official audio', 'popular country artists', 'classic country songs'],
+                rnb: ['r&b music official video', 'rnb songs official audio', 'modern soul music', 'new rnb artists', 'classic r&b songs'],
+                indie: ['indie music official video', 'indie songs official audio', 'alternative music artists', 'new indie music', 'indie pop songs'],
+                latin: ['latin music official video', 'reggaeton official audio', 'latin pop songs', 'new latin music', 'popular latin artists'],
+                kpop: ['kpop official mv', 'kpop official audio', 'new korean music', 'kpop solo artists', 'korean pop songs'],
+                anime: ['anime opening official', 'anime songs official audio', 'anime ending theme', 'japanese anime music', 'anime soundtrack song'],
+                lofi: ['lofi hip hop track', 'lofi beats official', 'chill lofi song', 'lofi artist official', 'jazzy lofi beat'],
+                blues: ['blues music performance', 'blues songs official', 'blues guitar music', 'modern blues artists', 'classic blues songs'],
+                reggae: ['reggae music official video', 'reggae songs official audio', 'modern reggae artists', 'roots reggae songs', 'new reggae music'],
+                disco: ['disco music official video', 'classic disco songs', 'modern disco artists', 'disco official audio', 'funk disco songs'],
+                punk: ['punk rock official video', 'punk songs official audio', 'pop punk songs', 'modern punk bands', 'classic punk music'],
+                ambient: ['ambient music track', 'ambient soundscape artist', 'atmospheric music official', 'dark ambient music', 'calm ambient music'],
+                random: ['music official video', 'new music official audio', 'popular music artists', 'classic songs official', 'live music performance']
             };
 
             const keywords = [...(genreKeywords[this.autoplay] || genreKeywords.random)];
@@ -1677,11 +1746,36 @@ class MusicPlayer {
                 || this.currentTrack?.id
                 || this.currentTrack?.url
                 || null;
-            const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)];
-            const results = await YouTube.search(randomKeyword, 15, this.guild.id);
+            this.rememberRecentAutoplayTrack(currentIdentity);
+            const excludedIdentities = new Set([
+                ...(Array.isArray(this.autoplayRecentTrackIds) ? this.autoplayRecentTrackIds : []),
+                ...(Array.isArray(this.autoplayFailedTrackIds) ? this.autoplayFailedTrackIds : []),
+            ]);
+            const initialCursor = Number.isSafeInteger(this.autoplaySearchCursor)
+                ? this.autoplaySearchCursor
+                : 0;
+            const randomKeyword = keywords[initialCursor % keywords.length];
+            this.autoplaySearchCursor = (initialCursor + 1) % keywords.length;
+            let results = await YouTube.search(
+                randomKeyword,
+                AUTOPLAY_SEARCH_RESULT_LIMIT,
+                this.guild.id
+            );
 
             if (!results || results.length === 0) {
-                throw new Error(`YouTube returned no ${this.autoplay} autoplay search results.`);
+                for (let attempt = 1; attempt < AUTOPLAY_SEARCH_ATTEMPTS; attempt += 1) {
+                    const keyword = keywords[this.autoplaySearchCursor % keywords.length];
+                    this.autoplaySearchCursor = (this.autoplaySearchCursor + 1) % keywords.length;
+                    results = await YouTube.search(
+                        keyword,
+                        AUTOPLAY_SEARCH_RESULT_LIMIT,
+                        this.guild.id
+                    );
+                    if (results?.length) break;
+                }
+                if (!results || results.length === 0) {
+                    throw new Error(`YouTube returned no ${this.autoplay} autoplay search results.`);
+                }
             }
 
             // Filter out non-music content
@@ -1691,8 +1785,8 @@ class MusicPlayer {
                 const duration = Number(track.duration) || 0;
                 if (duration > 0 && (duration < 30 || duration > 600)) return false;
 
-                const identity = track.id || track.url;
-                if (currentIdentity && identity === currentIdentity) return false;
+                const identity = this.getAutoplayTrackIdentity(track);
+                if (!identity || excludedIdentities.has(identity)) return false;
                 
                 // Filter out common non-music keywords in title
                 const title = (track.title || '').toLowerCase();
@@ -1720,11 +1814,18 @@ class MusicPlayer {
 
             if (filteredResults.length === 0) {
                 // Try again with a different keyword
-                const fallbackKeyword = keywords[Math.floor(Math.random() * keywords.length)];
-                const fallbackResults = await YouTube.search(fallbackKeyword, 10, this.guild.id);
+                const fallbackKeyword = keywords[this.autoplaySearchCursor % keywords.length];
+                this.autoplaySearchCursor = (this.autoplaySearchCursor + 1) % keywords.length;
+                const fallbackResults = await YouTube.search(
+                    fallbackKeyword,
+                    AUTOPLAY_SEARCH_RESULT_LIMIT,
+                    this.guild.id
+                );
                 const fallbackFiltered = (fallbackResults || []).filter(track => {
-                    const duration = Number(track.duration) || 0;
-                    return track?.url && (duration === 0 || (duration >= 30 && duration <= 600));
+                    const identity = this.getAutoplayTrackIdentity(track);
+                    return this.isPlayableAutoplaySearchResult(track)
+                        && identity
+                        && !excludedIdentities.has(identity);
                 });
                 
                 if (fallbackFiltered.length === 0) {
@@ -1736,7 +1837,13 @@ class MusicPlayer {
 
             // Pick random track from filtered results
             const randomTrack = filteredResults[Math.floor(Math.random() * filteredResults.length)];
-            await this.startAutoplayTrack(randomTrack);
+            try {
+                await this.startAutoplayTrack(randomTrack);
+                this.rememberRecentAutoplayTrack(randomTrack);
+            } catch (error) {
+                this.rememberFailedAutoplayTrack(randomTrack);
+                throw error;
+            }
             this.clearAutoplayRetry();
             return true;
 
@@ -2103,6 +2210,11 @@ class MusicPlayer {
             loop: this.loop,
             shuffle: this.shuffle,
             autoplay: this.autoplay,
+            autoplayRecentTrackIds: (this.autoplayRecentTrackIds || [])
+                .slice(-AUTOPLAY_RECENT_TRACK_LIMIT),
+            autoplayFailedTrackIds: (this.autoplayFailedTrackIds || [])
+                .slice(-AUTOPLAY_FAILED_TRACK_LIMIT),
+            autoplaySearchCursor: this.autoplaySearchCursor || 0,
             paused: this.paused,
             pauseReasons: Array.from(this.pauseReasons || []),
             playbackPositionMs: this.getCurrentTime() || 0,
@@ -2131,6 +2243,15 @@ class MusicPlayer {
         this.loop = state.loop ?? false;
         this.shuffle = state.shuffle ?? false;
         this.autoplay = state.autoplay ?? false;
+        this.autoplayRecentTrackIds = Array.isArray(state.autoplayRecentTrackIds)
+            ? state.autoplayRecentTrackIds.filter(Boolean).map(String).slice(-AUTOPLAY_RECENT_TRACK_LIMIT)
+            : [];
+        this.autoplayFailedTrackIds = Array.isArray(state.autoplayFailedTrackIds)
+            ? state.autoplayFailedTrackIds.filter(Boolean).map(String).slice(-AUTOPLAY_FAILED_TRACK_LIMIT)
+            : [];
+        this.autoplaySearchCursor = Number.isSafeInteger(state.autoplaySearchCursor)
+            ? Math.max(0, state.autoplaySearchCursor)
+            : 0;
         this.requesterId = state.requesterId || this.requesterId;
 
         this.previousTracks = (state.previousTracks || [])

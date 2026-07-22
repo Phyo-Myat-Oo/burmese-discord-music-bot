@@ -213,6 +213,108 @@ test('accepts a YouTube autoplay result whose flat search omitted duration', asy
     assert.equal(selectedTrack?.id, 'youtube-1');
 });
 
+test('genre autoplay does not cycle through the same two recent YouTube songs', async t => {
+    const originalSearch = YouTube.search;
+    t.after(() => { YouTube.search = originalSearch; });
+
+    const queries = [];
+    const searchResults = ['youtube-1', 'youtube-2', 'youtube-3'].map(id => ({
+        id,
+        title: `Official pop song ${id}`,
+        duration: 180,
+        url: `https://www.youtube.com/watch?v=${id}`,
+        platform: 'youtube',
+    }));
+    YouTube.search = async query => {
+        queries.push(query);
+        return searchResults;
+    };
+
+    const selectedIds = [];
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'pop',
+        autoplayInProgress: false,
+        autoplayRecentTrackIds: [],
+        autoplayFailedTrackIds: [],
+        autoplaySearchCursor: 0,
+        currentTrack: null,
+        guild: { id: 'guild-1' },
+        startAutoplayTrack: async function startAutoplayTrack(track) {
+            selectedIds.push(track.id);
+            this.currentTrack = track;
+        },
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+        const previousId = player.currentTrack?.id || null;
+        player.currentTrack = null;
+        assert.equal(await player.handleAutoplay({ excludeIdentity: previousId }), true);
+    }
+
+    assert.equal(new Set(selectedIds).size, 3);
+    assert.equal(new Set(queries.slice(0, 3)).size, 3);
+    assert.deepEqual(new Set(player.autoplayRecentTrackIds), new Set(selectedIds));
+});
+
+test('genre autoplay remembers a YouTube candidate that failed to start', async t => {
+    const originalSearch = YouTube.search;
+    t.after(() => { YouTube.search = originalSearch; });
+
+    const failed = {
+        id: 'youtube-broken',
+        title: 'Broken official rock song',
+        duration: 180,
+        url: 'https://www.youtube.com/watch?v=youtube-broken',
+        platform: 'youtube',
+    };
+    const playable = {
+        id: 'youtube-playable',
+        title: 'Playable official rock song',
+        duration: 180,
+        url: 'https://www.youtube.com/watch?v=youtube-playable',
+        platform: 'youtube',
+    };
+    let includePlayable = false;
+    YouTube.search = async () => includePlayable ? [failed, playable] : [failed];
+
+    const selectedIds = [];
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplay: 'rock',
+        autoplayInProgress: false,
+        autoplayRecentTrackIds: [],
+        autoplayFailedTrackIds: [],
+        autoplaySearchCursor: 0,
+        currentTrack: null,
+        guild: { id: 'guild-1' },
+        scheduleAutoplayRetry: () => true,
+        startAutoplayTrack: async track => {
+            if (track.id === failed.id) throw new Error('Video unavailable');
+            selectedIds.push(track.id);
+        },
+    });
+
+    assert.equal(await player.handleAutoplay(), false);
+    assert.deepEqual(player.autoplayFailedTrackIds, [failed.id]);
+
+    includePlayable = true;
+    assert.equal(await player.handleAutoplay(), true);
+    assert.deepEqual(selectedIds, [playable.id]);
+});
+
+test('genre autoplay keeps only the latest twenty recently played IDs', () => {
+    const player = Object.assign(Object.create(MusicPlayer.prototype), {
+        autoplayRecentTrackIds: [],
+    });
+
+    for (let index = 1; index <= 25; index += 1) {
+        player.rememberRecentAutoplayTrack(`youtube-${index}`);
+    }
+
+    assert.equal(player.autoplayRecentTrackIds.length, 20);
+    assert.equal(player.autoplayRecentTrackIds[0], 'youtube-6');
+    assert.equal(player.autoplayRecentTrackIds.at(-1), 'youtube-25');
+});
+
 test('returns to autoplay when the last queued source fails', async () => {
     let autoplayCalls = 0;
     const replacement = { id: 'phyu:track:replacement' };
